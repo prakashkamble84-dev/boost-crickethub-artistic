@@ -5,6 +5,17 @@ import { useFetch } from '@/hooks/useFetch';
 import ApperIcon from '@/components/ApperIcon';
 import { Button } from '@/components/ui/button';
 import { DetailSkeleton } from '@/components/PageSkeleton';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { formatLocalDate, DATE_FORMATS } from '@/utils/date';
 import { toast } from 'sonner';
 
@@ -12,10 +23,10 @@ const FIELDS = ['Id', 'Name', 'status_c', 'format_c', 'location_c', 'start_date_
 
 const badge = {
   Draft: 'bg-muted text-muted-foreground',
-  Upcoming: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200',
-  Live: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200',
-  Completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200',
-  Cancelled: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
+  Upcoming: 'bg-primary/10 text-primary',
+  Live: 'bg-highlight/10 text-highlight',
+  Completed: 'bg-success-muted text-success',
+  Cancelled: 'bg-warning-muted text-warning',
 };
 
 export const route = { path: '/tournaments/:id', layout: 'owner', access: 'authenticated' };
@@ -24,13 +35,13 @@ export default function TournamentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [deleting, setDeleting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const { data: tournament, loading, error, run } = useFetch(() => sdk.table('tournaments_c').select(FIELDS).get(id).then((result) => {
     if (!result.success) throw new Error(result.message);
     return result.data;
   }), [id]);
 
   async function removeTournament() {
-    if (!window.confirm(`Delete "${tournament?.Name}"? This cannot be undone.`)) return;
     setDeleting(true);
     try {
       const result = await sdk.table('tournaments_c').remove(id);
@@ -39,6 +50,7 @@ export default function TournamentDetail() {
         return;
       }
       toast.success('Tournament deleted.');
+      setDeleteOpen(false);
       navigate('/tournaments');
     } catch (removeError) {
       toast.error(removeError.message || 'Tournament could not be deleted.');
@@ -63,7 +75,19 @@ export default function TournamentDetail() {
         </div>
         <div className="flex gap-2">
           <Button asChild variant="outline"><Link to={`/tournaments/${id}/edit`}><ApperIcon name="Pencil" size={15} /> Edit</Link></Button>
-          <Button variant="destructive" onClick={removeTournament} disabled={deleting}>{deleting ? 'Deleting…' : 'Delete'}</Button>
+          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <AlertDialogTrigger asChild><Button variant="destructive">Delete tournament</Button></AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {tournament.Name}?</AlertDialogTitle>
+                <AlertDialogDescription>This permanently removes this tournament record. This action cannot be undone.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleting}>Keep tournament</AlertDialogCancel>
+                <AlertDialogAction variant="destructive" disabled={deleting} onClick={(event) => { event.preventDefault(); removeTournament(); }}>{deleting ? 'Deleting…' : 'Delete tournament'}</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
