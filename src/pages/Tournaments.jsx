@@ -13,18 +13,18 @@ const FIELDS = ['Id', 'Name', 'status_c', 'format_c', 'location_c', 'start_date_
 
 const statusStyles = {
   Draft: 'border-l-slate-400',
-  Upcoming: 'border-l-sky-500',
-  Live: 'border-l-rose-600',
-  Completed: 'border-l-emerald-600',
-  Cancelled: 'border-l-amber-500',
+  Upcoming: 'border-l-primary',
+  Live: 'border-l-highlight',
+  Completed: 'border-l-success',
+  Cancelled: 'border-l-warning',
 };
 
 const statusBadge = {
   Draft: 'bg-muted text-muted-foreground',
-  Upcoming: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200',
-  Live: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200',
-  Completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200',
-  Cancelled: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
+  Upcoming: 'bg-primary/10 text-primary',
+  Live: 'bg-highlight/10 text-highlight',
+  Completed: 'bg-success-muted text-success',
+  Cancelled: 'bg-warning-muted text-warning',
 };
 
 export const route = { path: '/tournaments', layout: 'owner', access: 'authenticated' };
@@ -78,7 +78,7 @@ export default function Tournaments() {
         </div>
       ) : null}
       {tournaments.length > 0 ? (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="overflow-hidden rounded-xl border border-border bg-card" aria-busy={loading}>
           <div className="hidden grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_100px] gap-4 border-b border-border bg-muted/50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:grid">
             <span>Tournament</span><span>Format</span><span>Start date</span><span>Teams</span><span>Status</span>
           </div>

@@ -12,12 +12,18 @@ import { toast } from 'sonner';
 
 const FIELDS = ['Id', 'Name', 'status_c', 'format_c', 'location_c', 'start_date_c', 'end_date_c', 'overs_c', 'teams_count_c', 'is_public_c', 'description_c'];
 
+function localDateInputValue() {
+  const date = new Date();
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60 * 1000).toISOString().slice(0, 10);
+}
+
 const emptyForm = {
   Name: '',
   status_c: 'Draft',
   format_c: 'League',
   location_c: '',
-  start_date_c: '2026-11-20',
+  start_date_c: localDateInputValue(),
   end_date_c: '',
   overs_c: 10,
   teams_count_c: 8,
@@ -29,7 +35,7 @@ export default function TournamentForm({ recordId = null, mode = 'create' }) {
   const navigate = useNavigate();
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const { data: record, loading, error } = useFetch(() => {
+  const { data: record, loading, error, run } = useFetch(() => {
     if (!recordId) return Promise.resolve(null);
     return sdk.table('tournaments_c').select(FIELDS).get(recordId).then((result) => {
       if (!result.success) throw new Error(result.message);
@@ -64,6 +70,20 @@ export default function TournamentForm({ recordId = null, mode = 'create' }) {
       toast.error('Add a tournament name, location and start date.');
       return;
     }
+    if (form.end_date_c && form.end_date_c < form.start_date_c) {
+      toast.error('The end date cannot be before the start date.');
+      return;
+    }
+    const overs = Number(form.overs_c);
+    const teams = Number(form.teams_count_c);
+    if (!Number.isInteger(overs) || overs < 1 || overs > 50) {
+      toast.error('Overs per innings must be a whole number from 1 to 50.');
+      return;
+    }
+    if (!Number.isInteger(teams) || teams < 2 || teams > 64) {
+      toast.error('Expected teams must be a whole number from 2 to 64.');
+      return;
+    }
     setSaving(true);
     const payload = {
       Name: form.Name.trim(),
@@ -72,8 +92,8 @@ export default function TournamentForm({ recordId = null, mode = 'create' }) {
       location_c: form.location_c.trim(),
       start_date_c: form.start_date_c,
       end_date_c: form.end_date_c || null,
-      overs_c: Number(form.overs_c),
-      teams_count_c: Number(form.teams_count_c),
+      overs_c: overs,
+      teams_count_c: teams,
       is_public_c: Boolean(form.is_public_c),
       description_c: form.description_c.trim(),
     };
@@ -96,7 +116,7 @@ export default function TournamentForm({ recordId = null, mode = 'create' }) {
   }
 
   if (loading && recordId) return <div className="space-y-4"><Skeleton className="h-8 w-64" /><Skeleton className="h-64 w-full" /></div>;
-  if (error) return <div className="rounded-xl border border-destructive/30 p-5"><p className="font-medium">Could not load this tournament.</p><p className="mt-1 text-sm text-muted-foreground">{error.message}</p></div>;
+  if (error) return <div className="rounded-xl border border-destructive/30 p-5"><p className="font-medium">Could not load this tournament.</p><p className="mt-1 text-sm text-muted-foreground">{error.message}</p><Button variant="outline" className="mt-3" onClick={run}>Try again</Button></div>;
   if (recordId && !record && !loading) return <div className="rounded-xl border border-border p-6">Tournament not found.</div>;
 
   return (
