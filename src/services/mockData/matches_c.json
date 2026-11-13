@@ -1,0 +1,15 @@
+{
+  "_meta": {
+    "_table": { "label": "Match", "plural": "Matches", "icon": "CalendarDays" },
+    "Name": { "type": "Text", "label": "Match title", "required": true },
+    "tournament_c": { "type": "Lookup", "label": "Tournament", "lookup": "tournaments_c", "required": true },
+    "team_a_c": { "type": "Lookup", "label": "Team A", "lookup": "squads_c", "required": true },
+    "team_b_c": { "type": "Lookup", "label": "Team B", "lookup": "squads_c", "required": true },
+    "match_date_c": { "type": "Date", "label": "Match date", "required": true },
+    "start_time_c": { "type": "Text", "label": "Start time" },
+    "venue_c": { "type": "Text", "label": "Venue" },
+    "overs_c": { "type": "Number", "label": "Overs per innings", "required": true },
+    "status_c": { "type": "Picklist", "label": "Match status", "values": "Scheduled,Live,Completed,Abandoned" }
+  },
+  "records": []
+}
