@@ -1,0 +1,10 @@
+{
+  "_meta": {
+    "_table": { "label": "Player", "plural": "Players", "icon": "UserRound" },
+    "Name": { "type": "Text", "label": "Player name", "required": true },
+    "squad_c": { "type": "Lookup", "label": "Cricket squad", "lookup": "squads_c", "required": true },
+    "jersey_number_c": { "type": "Number", "label": "Jersey number" },
+    "role_c": { "type": "Picklist", "label": "Playing role", "values": "Batter,Bowler,All-rounder,Wicketkeeper" }
+  },
+  "records": []
+}

@@ -1,0 +1,11 @@
+{
+  "_meta": {
+    "_table": { "label": "Cricket squad", "plural": "Cricket squads", "icon": "Shield" },
+    "Name": { "type": "Text", "label": "Team name", "required": true },
+    "tournament_c": { "type": "Lookup", "label": "Tournament", "lookup": "tournaments_c", "required": true },
+    "captain_c": { "type": "Text", "label": "Captain" },
+    "contact_c": { "type": "Email", "label": "Team contact" },
+    "color_c": { "type": "Text", "label": "Team color" }
+  },
+  "records": []
+}
