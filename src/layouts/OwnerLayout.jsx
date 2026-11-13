@@ -12,13 +12,13 @@ export default function OwnerLayout() {
 
   return (
     <div className="min-h-svh bg-background text-foreground">
-      <header className="border-b border-border bg-card">
+      <header className="sticky top-0 z-40 border-b border-border bg-card/95 shadow-sm backdrop-blur-xl">
         <div className="mx-auto flex h-(--spacing-header) max-w-[1440px] items-center gap-4 px-4 md:px-8">
           <Link to={homeRoute} className="flex shrink-0 items-center gap-2.5">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20">
               <ApperIcon name="Trophy" size={19} />
             </span>
-            <span className="font-heading text-lg font-bold tracking-tight">{APP_CONFIG.name}</span>
+            <span className="font-heading text-2xl font-bold tracking-wide">{APP_CONFIG.name}</span>
           </Link>
           <div className="ml-auto flex items-center gap-3">
             <span className="hidden text-xs font-medium text-muted-foreground sm:inline">Organizer workspace</span>
@@ -33,8 +33,8 @@ export default function OwnerLayout() {
                 to={item.to}
                 end={item.to === '/'}
                 className={({ isActive }) => cn(
-                  'flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors',
-                  isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  'flex min-h-10 shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all duration-150',
+                  isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                 )}
               >
                 <ApperIcon name={item.icon ?? 'Circle'} size={16} />
