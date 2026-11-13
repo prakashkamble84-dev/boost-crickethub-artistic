@@ -1,11 +1,234 @@
 {
   "_meta": {
-    "_table": { "label": "Cricket squad", "plural": "Cricket squads", "icon": "Shield" },
-    "Name": { "type": "Text", "label": "Team name", "required": true },
-    "tournament_c": { "type": "Lookup", "label": "Tournament", "lookup": "tournaments_c", "required": true },
-    "captain_c": { "type": "Text", "label": "Captain" },
-    "contact_c": { "type": "Email", "label": "Team contact" },
-    "color_c": { "type": "Text", "label": "Team color" }
+    "_table": {
+      "label": "Cricket squad",
+      "plural": "Cricket squads",
+      "icon": "Shield"
+    },
+    "Name": {
+      "type": "Text",
+      "label": "Team name",
+      "required": true
+    },
+    "tournament_c": {
+      "type": "Lookup",
+      "label": "Tournament",
+      "lookup": "tournaments_c",
+      "required": true
+    },
+    "captain_c": {
+      "type": "Text",
+      "label": "Captain"
+    },
+    "contact_c": {
+      "type": "Email",
+      "label": "Team contact"
+    },
+    "color_c": {
+      "type": "Text",
+      "label": "Team color"
+    }
   },
-  "records": []
+  "records": [
+    {
+      "Id": "7a000000-0000-4000-8000-000000000001",
+      "Owner": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "ModifiedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedOn": "2026-11-13T12:00:00.000Z",
+      "ModifiedOn": "2026-11-13T12:00:00.000Z",
+      "Name": "Pune Panthers",
+      "tournament_c": {
+        "Id": "6d5a1f10-0f7a-4d7b-8e21-0c1b2a3d4e51",
+        "Name": "Pune Monsoon Cup"
+      },
+      "captain_c": "Aarav Kulkarni",
+      "contact_c": "panthers@demo.app",
+      "color_c": "#315D48"
+    },
+    {
+      "Id": "7a000000-0000-4000-8000-000000000002",
+      "Owner": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "ModifiedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedOn": "2026-11-13T12:00:00.000Z",
+      "ModifiedOn": "2026-11-13T12:00:00.000Z",
+      "Name": "Deccan Strikers",
+      "tournament_c": {
+        "Id": "6d5a1f10-0f7a-4d7b-8e21-0c1b2a3d4e51",
+        "Name": "Pune Monsoon Cup"
+      },
+      "captain_c": "Rohan Jadhav",
+      "contact_c": "strikers@demo.app",
+      "color_c": "#A83E73"
+    },
+    {
+      "Id": "7a000000-0000-4000-8000-000000000003",
+      "Owner": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "ModifiedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedOn": "2026-11-13T12:00:00.000Z",
+      "ModifiedOn": "2026-11-13T12:00:00.000Z",
+      "Name": "Sinhagad Sixers",
+      "tournament_c": {
+        "Id": "6d5a1f10-0f7a-4d7b-8e21-0c1b2a3d4e51",
+        "Name": "Pune Monsoon Cup"
+      },
+      "captain_c": "Vedant Patil",
+      "contact_c": "sixers@demo.app",
+      "color_c": "#4777A8"
+    },
+    {
+      "Id": "7a000000-0000-4000-8000-000000000004",
+      "Owner": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "ModifiedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedOn": "2026-11-13T12:00:00.000Z",
+      "ModifiedOn": "2026-11-13T12:00:00.000Z",
+      "Name": "Kothrud Kings",
+      "tournament_c": {
+        "Id": "6d5a1f10-0f7a-4d7b-8e21-0c1b2a3d4e51",
+        "Name": "Pune Monsoon Cup"
+      },
+      "captain_c": "Siddharth More",
+      "contact_c": "kings@demo.app",
+      "color_c": "#B87932"
+    },
+    {
+      "Id": "7a000000-0000-4000-8000-000000000005",
+      "Owner": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "ModifiedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedOn": "2026-11-13T12:00:00.000Z",
+      "ModifiedOn": "2026-11-13T12:00:00.000Z",
+      "Name": "Baner Blazers",
+      "tournament_c": {
+        "Id": "6d5a1f10-0f7a-4d7b-8e21-0c1b2a3d4e52",
+        "Name": "Deccan Night League"
+      },
+      "captain_c": "Ishaan Deshmukh",
+      "contact_c": "blazers@demo.app",
+      "color_c": "#6B55A1"
+    },
+    {
+      "Id": "7a000000-0000-4000-8000-000000000006",
+      "Owner": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "ModifiedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedOn": "2026-11-13T12:00:00.000Z",
+      "ModifiedOn": "2026-11-13T12:00:00.000Z",
+      "Name": "Wakad Warriors",
+      "tournament_c": {
+        "Id": "6d5a1f10-0f7a-4d7b-8e21-0c1b2a3d4e52",
+        "Name": "Deccan Night League"
+      },
+      "captain_c": "Omkar Shinde",
+      "contact_c": "warriors@demo.app",
+      "color_c": "#3D8290"
+    },
+    {
+      "Id": "7a000000-0000-4000-8000-000000000007",
+      "Owner": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "ModifiedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedOn": "2026-11-13T12:00:00.000Z",
+      "ModifiedOn": "2026-11-13T12:00:00.000Z",
+      "Name": "Aundh Avengers",
+      "tournament_c": {
+        "Id": "6d5a1f10-0f7a-4d7b-8e21-0c1b2a3d4e52",
+        "Name": "Deccan Night League"
+      },
+      "captain_c": "Atharva Joshi",
+      "contact_c": "avengers@demo.app",
+      "color_c": "#A64E4E"
+    },
+    {
+      "Id": "7a000000-0000-4000-8000-000000000008",
+      "Owner": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "ModifiedBy": {
+        "Id": "a41c9d27-5e8f-4b06-9c3a-d7f218e64b90",
+        "Name": "Demo Admin"
+      },
+      "CreatedOn": "2026-11-13T12:00:00.000Z",
+      "ModifiedOn": "2026-11-13T12:00:00.000Z",
+      "Name": "Pashan Panthers",
+      "tournament_c": {
+        "Id": "6d5a1f10-0f7a-4d7b-8e21-0c1b2a3d4e52",
+        "Name": "Deccan Night League"
+      },
+      "captain_c": "Nikhil Pawar",
+      "contact_c": "pashan@demo.app",
+      "color_c": "#63824B"
+    }
+  ]
 }
