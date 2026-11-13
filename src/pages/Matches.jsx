@@ -16,10 +16,10 @@ const TOURNAMENT_FIELDS = ['Id', 'Name', 'overs_c'];
 const TEAM_FIELDS = ['Id', 'Name', 'tournament_c'];
 
 const statusStyles = {
-  Scheduled: 'bg-sky-500/10 text-sky-700 dark:text-sky-300',
-  Live: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  Scheduled: 'bg-primary/10 text-primary',
+  Live: 'bg-success-muted text-success',
   Completed: 'bg-muted text-muted-foreground',
-  Abandoned: 'bg-rose-500/10 text-rose-700 dark:text-rose-300'
+  Abandoned: 'bg-destructive/10 text-destructive'
 };
 
 export const route = { path: '/matches', layout: 'owner', access: 'authenticated' };
@@ -58,8 +58,13 @@ export default function Matches() {
 
   async function createMatch(event) {
     event.preventDefault();
-    if (!name.trim() || !tournament || !teamA || !teamB || teamA === teamB || !date || Number(overs) < 1 || Number(overs) > 50) {
-      return toast.error('Complete the required fields and choose two different teams.');
+    if (!name.trim() || !tournament || !teamA || !teamB || teamA === teamB || !date || !Number.isInteger(Number(overs)) || Number(overs) < 1 || Number(overs) > 50) {
+      return toast.error('Complete the required fields, choose two different teams and enter 1–50 whole overs.');
+    }
+    const selectedA = (teams ?? []).find((team) => String(team.Id) === String(teamA));
+    const selectedB = (teams ?? []).find((team) => String(team.Id) === String(teamB));
+    if (!selectedA || !selectedB || String(selectedA.tournament_c?.Id ?? selectedA.tournament_c) !== String(tournament) || String(selectedB.tournament_c?.Id ?? selectedB.tournament_c) !== String(tournament)) {
+      return toast.error('Both teams must belong to the selected tournament.');
     }
     setSaving(true);
     try {

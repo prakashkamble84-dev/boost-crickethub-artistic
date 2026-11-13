@@ -105,9 +105,17 @@ export default function TournamentDetail() {
         </dl>
         <div className="mt-5 border-t border-border pt-4"><dt className="text-xs text-muted-foreground">Description</dt><dd className="mt-1 whitespace-pre-wrap text-sm">{tournament.description_c || 'No description added.'}</dd></div>
       </div>
-      <div className="rounded-xl border border-dashed border-border p-5">
-        <div className="flex items-center gap-2"><ApperIcon name="Construction" size={18} className="text-highlight" /><h2 className="font-semibold">Next setup steps</h2></div>
-        <p className="mt-2 text-sm text-muted-foreground">Team registration, fixture generation and configurable playing conditions will be added in the next CricketHub build milestone.</p>
+      <div className="rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-xl font-bold uppercase">Tournament operations</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Manage registered squads and scheduled matches for this competition.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline"><Link to="/teams">Manage teams</Link></Button>
+            <Button asChild><Link to="/matches">View fixtures</Link></Button>
+          </div>
+        </div>
       </div>
     </div>
   );
