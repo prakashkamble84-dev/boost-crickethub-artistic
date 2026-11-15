@@ -208,6 +208,43 @@ export default function TournamentDetail() {
         </div>}
         <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground">Points: win 2 · tie 1 · no result 1 · abandoned 1 · loss 0. Ranking: points, net run rate, wins, then team name. NRR excludes no-result and abandoned matches; all-out innings use the full overs quota.</div>
       </section>
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-primary">Match centre</p>
+            <h2 className="mt-1 font-heading text-xl font-bold uppercase">Fixtures &amp; results</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Open any fixture to manage match details, scoring and its public scoreboard.</p>
+          </div>
+          <Button size="sm" variant="outline" disabled={matchesLoading} onClick={reloadMatches}>Refresh fixtures</Button>
+        </div>
+        {matchesError ? <div className="p-5 text-sm text-destructive">Fixtures could not be loaded: {matchesError.message}</div> : matchesLoading ? <div className="p-8 text-center text-sm text-muted-foreground">Loading fixtures…</div> : !(matches ?? []).length ? <div className="p-8 text-center text-sm text-muted-foreground">No fixtures have been created for this tournament yet.</div> : <div className="divide-y divide-border">
+          {[...(matches ?? [])].sort((a, b) => {
+            const rank = { Live: 0, Upcoming: 1, Scheduled: 1, Completed: 2, Abandoned: 3, Cancelled: 4 };
+            return (rank[a.status_c] ?? 5) - (rank[b.status_c] ?? 5) || String(a.Name || '').localeCompare(String(b.Name || ''));
+          }).map(match => {
+            const teamA = match.team_a_c?.Name || 'Team A';
+            const teamB = match.team_b_c?.Name || 'Team B';
+            const winnerName = match.winner_team_c?.Name;
+            const resultLabel = match.result_type_c === 'Win' && winnerName
+              ? `${winnerName} won`
+              : match.result_type_c === 'Tie' ? 'Match tied'
+              : match.result_type_c === 'No Result' ? 'No result'
+              : match.result_type_c === 'Abandoned' || match.status_c === 'Abandoned' ? 'Match abandoned'
+              : null;
+            return <Link key={match.Id} to={`/matches/${match.Id}`} className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{match.Name || 'Tournament fixture'}</p>
+                <p className="mt-1 font-semibold">{teamA} <span className="mx-1 text-muted-foreground">vs</span> {teamB}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{resultLabel || `${match.overs_c || tournament.overs_c || '—'} overs · ${match.status_c || 'Status not set'}`}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${badge[match.status_c] ?? 'bg-muted text-muted-foreground'}`}>{match.status_c || 'Unknown'}</span>
+                <ApperIcon name="ChevronRight" size={16} className="text-muted-foreground" />
+              </div>
+            </Link>;
+          })}
+        </div>}
+      </section>
       <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
