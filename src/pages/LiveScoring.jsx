@@ -152,6 +152,7 @@ export default function LiveScoring() {
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
   const [nextBatter, setNextBatter] = useState('');
+  const [pendingResultAction, setPendingResultAction] = useState('');
   const { data: match, loading: matchLoading, error: matchError, run: reloadMatch } = useFetch(() => sdk.table('matches_c').select(MATCH_FIELDS).get(id).then(r => {
     if (!r.success) throw new Error(r.message);
     return r.data;
@@ -210,7 +211,8 @@ export default function LiveScoring() {
 
   async function startInnings(event) {
     event.preventDefault();
-    if (!match || !battingTeam || !bowlingTeam || battingTeam === bowlingTeam || !striker || !nonStriker || striker === nonStriker || !bowler) {
+    if (!match || ['Completed', 'Abandoned'].includes(match.status_c)) return toast.error('This match has already been finalized.');
+    if (!battingTeam || !bowlingTeam || battingTeam === bowlingTeam || !striker || !nonStriker || striker === nonStriker || !bowler) {
       return toast.error('Choose two different teams, two different opening batters and a bowler.');
     }
     setStarting(true);
@@ -428,6 +430,38 @@ export default function LiveScoring() {
     reloadMatch();
   }
 
+  async function finalizeWithoutWinner(resultType) {
+    if (saving || !['No Result', 'Abandoned'].includes(resultType) || ['Completed', 'Abandoned'].includes(match?.status_c)) return;
+    setSaving(true);
+    try {
+      if (activeInnings) {
+        const stopped = await sdk.table('innings_c').update({ Id: activeInnings.Id, status_c: 'Abandoned' });
+        if (!stopped.data?.length) throw new Error(stopped.messages?.[0] || 'Could not close the active innings.');
+      }
+      const isAbandoned = resultType === 'Abandoned';
+      const summary = isAbandoned ? 'Match abandoned' : 'No result';
+      const saved = await sdk.table('matches_c').update({
+        Id: id,
+        status_c: isAbandoned ? 'Abandoned' : 'Completed',
+        result_type_c: resultType,
+        winner_team_c: null,
+        result_margin_c: 0,
+        result_summary_c: summary
+      });
+      if (!saved.data?.length) throw new Error(saved.messages?.[0] || 'Could not save the match outcome.');
+      setPendingResultAction('');
+      toast.success(`${summary} recorded.`);
+      reloadInnings();
+      reloadMatch();
+    } catch (error) {
+      toast.error(error.message || 'Could not finalize the match. Refresh and check its status.');
+      reloadInnings();
+      reloadMatch();
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function retryMatchResult() {
     if (saving) return;
     const second = (inningsRows ?? []).find(row => Number(row.innings_number_c) === 2);
@@ -479,10 +513,25 @@ export default function LiveScoring() {
           <h1 className="mt-2 font-heading text-4xl font-bold uppercase">{match.Name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{match.team_a_c?.Name} vs {match.team_b_c?.Name} · {match.overs_c} overs per innings</p>
         </div>
-        {!activeInnings && match.status_c !== 'Completed' && (inningsRows ?? []).some(row => Number(row.innings_number_c) === 2 && row.status_c === 'Completed') ? <Button variant="outline" disabled={saving} onClick={retryMatchResult}>{saving ? 'Saving…' : 'Retry result save'}</Button> : !activeInnings && match.status_c !== 'Completed' ? <Button onClick={() => { setBattingTeam(idOf(match.team_a_c)); setBowlingTeam(idOf(match.team_b_c)); setSetupOpen(true); }}>Start innings</Button> : activeInnings ? <Button variant="outline" disabled={saving || (Number(activeInnings.innings_number_c) === 2 && !chaseWon && !chaseLost)} onClick={completeInnings}>{saving ? 'Saving…' : Number(activeInnings.innings_number_c) === 2 ? 'Finalize match' : 'Complete innings'}</Button> : <span className="rounded-full bg-success-muted px-3 py-2 text-sm font-semibold text-success">MATCH COMPLETED</span>}
+        <div className="flex flex-wrap items-center gap-2">
+          {!activeInnings && !['Completed', 'Abandoned'].includes(match.status_c) && (inningsRows ?? []).some(row => Number(row.innings_number_c) === 2 && row.status_c === 'Completed') ? <Button variant="outline" disabled={saving} onClick={retryMatchResult}>{saving ? 'Saving…' : 'Retry result save'}</Button> : !activeInnings && !['Completed', 'Abandoned'].includes(match.status_c) ? <Button onClick={() => { setBattingTeam(idOf(match.team_a_c)); setBowlingTeam(idOf(match.team_b_c)); setSetupOpen(true); }}>Start innings</Button> : activeInnings ? <Button variant="outline" disabled={saving || (Number(activeInnings.innings_number_c) === 2 && !chaseWon && !chaseLost)} onClick={completeInnings}>{saving ? 'Saving…' : Number(activeInnings.innings_number_c) === 2 ? 'Finalize match' : 'Complete innings'}</Button> : <span className="rounded-full bg-success-muted px-3 py-2 text-sm font-semibold text-success">{match.status_c === 'Abandoned' ? 'MATCH ABANDONED' : 'MATCH COMPLETED'}</span>}
+          {!['Completed', 'Abandoned'].includes(match.status_c) ? <>
+            <Button type="button" variant="outline" disabled={saving} onClick={() => setPendingResultAction('No Result')}>Record no result</Button>
+            <Button type="button" variant="outline" disabled={saving} onClick={() => setPendingResultAction('Abandoned')}>Abandon match</Button>
+          </> : null}
+        </div>
       </header>
 
-      {match.status_c === 'Completed' && match.result_summary_c ? <section className="rounded-xl border border-primary/30 bg-primary/5 p-5"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Match result</p><h2 className="mt-1 font-heading text-2xl font-bold">{match.result_summary_c}</h2><p className="mt-1 text-sm text-muted-foreground">{match.result_type_c === 'Tie' ? 'Scores level after both innings.' : match.winner_team_c?.Name || 'Winning team'}</p></section> : null}
+      {pendingResultAction ? <section className="rounded-xl border border-destructive/30 bg-card p-5">
+        <p className="font-semibold">Confirm {pendingResultAction === 'Abandoned' ? 'match abandonment' : 'no result'}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{pendingResultAction === 'Abandoned' ? 'This permanently marks the match as abandoned.' : 'Use this only when competition rules or match conditions mean neither team receives a result.'} {activeInnings ? 'The active innings will also be closed as abandoned.' : ''} Scoring cannot continue after confirmation.</p>
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="outline" disabled={saving} onClick={() => setPendingResultAction('')}>Cancel</Button>
+          <Button type="button" disabled={saving} onClick={() => finalizeWithoutWinner(pendingResultAction)}>{saving ? 'Saving…' : `Confirm ${pendingResultAction === 'Abandoned' ? 'abandonment' : 'no result'}`}</Button>
+        </div>
+      </section> : null}
+
+      {(match.status_c === 'Completed' || match.status_c === 'Abandoned') && match.result_summary_c ? <section className="rounded-xl border border-primary/30 bg-primary/5 p-5"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Match result</p><h2 className="mt-1 font-heading text-2xl font-bold">{match.result_summary_c}</h2><p className="mt-1 text-sm text-muted-foreground">{match.result_type_c === 'Tie' ? 'Scores level after both innings.' : match.result_type_c === 'No Result' ? 'No winner recorded under the competition outcome.' : match.result_type_c === 'Abandoned' ? 'The match was stopped without a result.' : match.winner_team_c?.Name || 'Winning team'}</p></section> : null}
 
       {setupOpen ? <form onSubmit={startInnings} className="grid gap-4 rounded-xl border border-border bg-card p-5 sm:grid-cols-2">
         <div className="sm:col-span-2"><h2 className="font-heading text-2xl font-bold uppercase">Innings setup</h2><p className="text-sm text-muted-foreground">Set the batting order and opening bowler before the first ball.</p></div>
@@ -603,7 +652,7 @@ export default function LiveScoring() {
             <section className="rounded-xl border border-border bg-card p-5"><div className="flex items-center justify-between gap-3"><h3 className="font-heading text-xl font-bold uppercase">Recent deliveries</h3><Button type="button" size="sm" variant="outline" disabled={saving || deliveriesLoading || !(deliveries ?? []).length} onClick={undoLastDelivery}>Undo last ball</Button></div><div className="mt-3 space-y-2">{(deliveries ?? []).slice(-8).reverse().map(d => <div key={d.Id} className="flex items-center justify-between border-b border-border pb-2 text-sm"><span className="text-muted-foreground">{d.over_number_c}.{d.ball_number_c} · {d.striker_c?.Name || 'Batter'}</span><strong>{d.wicket_type_c && d.wicket_type_c !== 'None' ? 'Wicket' : `+${Number(d.batter_runs_c || 0) + Number(d.extras_runs_c || 0)}`}</strong></div>)}{!(deliveries ?? []).length ? <p className="text-sm text-muted-foreground">The first delivery has not been recorded.</p> : null}</div></section>
           </aside>
         </form>
-      </> : <section className="rounded-xl border border-dashed border-border bg-card p-8 text-center"><ApperIcon name="PlayCircle" size={32} className="mx-auto text-muted-foreground" /><h2 className="mt-3 font-heading text-2xl font-bold uppercase">{inningsLoading ? 'Loading innings…' : 'Ready for the toss'}</h2><p className="mt-1 text-sm text-muted-foreground">{(inningsRows ?? []).length ? 'Previous innings are saved. Start the next innings when the teams are ready.' : 'Set the batting order and opening bowler to begin ball-by-ball scoring.'}</p>{!inningsLoading ? <Button className="mt-4" onClick={() => { setBattingTeam(idOf(match.team_a_c)); setBowlingTeam(idOf(match.team_b_c)); setSetupOpen(true); }}>Set up innings</Button> : null}</section>}
+      </> : <section className="rounded-xl border border-dashed border-border bg-card p-8 text-center"><ApperIcon name="PlayCircle" size={32} className="mx-auto text-muted-foreground" /><h2 className="mt-3 font-heading text-2xl font-bold uppercase">{inningsLoading ? 'Loading innings…' : 'Ready for the toss'}</h2><p className="mt-1 text-sm text-muted-foreground">{(inningsRows ?? []).length ? 'Previous innings are saved. Start the next innings when the teams are ready.' : 'Set the batting order and opening bowler to begin ball-by-ball scoring.'}</p>{!inningsLoading && !['Completed', 'Abandoned'].includes(match.status_c) ? <Button className="mt-4" onClick={() => { setBattingTeam(idOf(match.team_a_c)); setBowlingTeam(idOf(match.team_b_c)); setSetupOpen(true); }}>Set up innings</Button> : null}</section>}
       {historicalScorecards.map(item => <section key={item.innings.Id} className="space-y-4 rounded-xl border border-border bg-card p-5">
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
           <div>
