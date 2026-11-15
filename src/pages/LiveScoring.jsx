@@ -200,7 +200,8 @@ export default function LiveScoring() {
   const ballsRemaining = Math.max(0, maxOvers * 6 - score.legalBalls);
   const chaseWon = target > 0 && score.runs >= target;
   const chaseLost = target > 0 && (score.wickets >= 10 || ballsRemaining === 0) && !chaseWon;
-  const availableBatters = battingPlayers.filter(p => ![striker, nonStriker].includes(String(p.Id)));
+  const dismissedBatterIds = new Set((deliveries ?? []).filter(ball => ball.wicket_type_c && ball.wicket_type_c !== 'None').map(ball => idOf(ball.dismissed_player_c)));
+  const availableBatters = battingPlayers.filter(p => ![striker, nonStriker].includes(String(p.Id)) && !dismissedBatterIds.has(String(p.Id)));
   const overComplete = score.legalBalls > 0 && score.legalBalls % 6 === 0;
 
   useEffect(() => {
