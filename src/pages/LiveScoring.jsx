@@ -88,6 +88,13 @@ export default function LiveScoring() {
   const maxOvers = Number(match?.overs_c || 20);
   const overComplete = score.legalBalls > 0 && score.legalBalls % 6 === 0;
 
+  useEffect(() => {
+    if (!activeInnings) return;
+    setStriker(idOf(activeInnings.current_striker_c));
+    setNonStriker(idOf(activeInnings.current_non_striker_c));
+    setBowler(idOf(activeInnings.current_bowler_c));
+  }, [activeInnings?.Id]);
+
   async function startInnings(event) {
     event.preventDefault();
     if (!match || !battingTeam || !bowlingTeam || battingTeam === bowlingTeam || !striker || !nonStriker || striker === nonStriker || !bowler) {
@@ -105,7 +112,10 @@ export default function LiveScoring() {
         status_c: 'In Progress',
         total_runs_c: 0,
         wickets_c: 0,
-        legal_balls_c: 0
+        legal_balls_c: 0,
+        current_striker_c: striker,
+        current_non_striker_c: nonStriker,
+        current_bowler_c: bowler
       });
       if (!result.data?.length) return toast.error(result.messages?.[0] || 'Could not start innings.');
       setSetupOpen(false);
@@ -162,7 +172,17 @@ export default function LiveScoring() {
       if (!result.data?.length) return toast.error(result.messages?.[0] || 'Delivery was not saved.');
       const updatedRows = [...previous, result.data[0]];
       const next = scoreDeliveries(updatedRows);
-      let newStriker = striker;\n      let newNonStriker = nonStriker;\n      const runningExtras = extrasType === 'Wide' || extrasType === 'No-ball' ? Math.max(0, extraRuns - 1) : extraRuns;\n      const completedRuns = batRuns + (['Bye', 'Leg-bye', 'Wide', 'No-ball'].includes(extrasType) ? runningExtras : 0);\n      if (completedRuns % 2 === 1) [newStriker, newNonStriker] = [newNonStriker, newStriker];\n      if (legal && next.legalBalls % 6 === 0) [newStriker, newNonStriker] = [newNonStriker, newStriker];\n      if (wicketType !== 'None') {\n        if (dismissedPlayer === newStriker) newStriker = nextBatter;\n        else if (dismissedPlayer === newNonStriker) newNonStriker = nextBatter;\n      }\n      const update = await sdk.table('innings_c').update({
+      let newStriker = striker;
+      let newNonStriker = nonStriker;
+      const runningExtras = extrasType === 'Wide' || extrasType === 'No-ball' ? Math.max(0, extraRuns - 1) : extraRuns;
+      const completedRuns = batRuns + (['Bye', 'Leg-bye', 'Wide', 'No-ball'].includes(extrasType) ? runningExtras : 0);
+      if (completedRuns % 2 === 1) [newStriker, newNonStriker] = [newNonStriker, newStriker];
+      if (legal && next.legalBalls % 6 === 0) [newStriker, newNonStriker] = [newNonStriker, newStriker];
+      if (wicketType !== 'None') {
+        if (dismissedPlayer === newStriker) newStriker = nextBatter;
+        else if (dismissedPlayer === newNonStriker) newNonStriker = nextBatter;
+      }
+      const update = await sdk.table('innings_c').update({
         Id: activeInnings.Id,
         total_runs_c: next.runs,
         wickets_c: next.wickets,
@@ -171,7 +191,10 @@ export default function LiveScoring() {
         no_balls_runs_c: next.noBalls,
         byes_runs_c: next.byes,
         leg_byes_runs_c: next.legByes,
-        penalty_runs_c: next.penalties
+        penalty_runs_c: next.penalties,
+        current_striker_c: newStriker,
+        current_non_striker_c: newNonStriker,
+        current_bowler_c: bowler
       });
       if (!update.data?.length) {
         toast.error('Ball saved, but the innings summary did not update. Refresh before continuing.');
@@ -252,7 +275,7 @@ export default function LiveScoring() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/40 px-5 py-3"><div><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Innings {activeInnings.innings_number_c}</p><h2 className="font-heading text-2xl font-bold uppercase">{activeInnings.batting_team_c?.Name || 'Batting team'}</h2></div><span className="rounded-full bg-success-muted px-3 py-1 text-xs font-bold text-success">LIVE</span></div>
           <div className="grid gap-4 p-5 sm:grid-cols-[1.3fr_1fr]">
             <div><p className="font-heading text-5xl font-bold tabular-nums">{score.runs}<span className="text-2xl text-muted-foreground">/{score.wickets}</span></p><p className="mt-1 text-sm text-muted-foreground">{oversText(score.legalBalls)} overs · {maxOvers} overs · Run rate {score.legalBalls ? (score.runs / (score.legalBalls / 6)).toFixed(2) : '0.00'}</p><p className="mt-3 text-sm text-muted-foreground">Extras {score.extras} · Wides {score.wides} · No-balls {score.noBalls} · Byes {score.byes} · Leg-byes {score.legByes}</p></div>
-            <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === striker))}</p></div><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Non-striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === nonStriker))}</p></div><div className="col-span-2 rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Bowler</p><select aria-label="Current bowler" className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2" value={bowler} onChange={e => setBowler(e.target.value)}><option value="">Choose bowler</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div></div>
+            <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === striker))}</p></div><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Non-striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === nonStriker))}</p></div><div className="col-span-2 rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Bowler</p><select aria-label="Current bowler" className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2" value={bowler} onChange={async e => { const value = e.target.value; setBowler(value); try { const saved = await sdk.table('innings_c').update({ Id: activeInnings.Id, current_bowler_c: value }); if (!saved.data?.length) toast.error('Bowler selection was not saved.'); } catch (error) { toast.error(error.message || 'Bowler selection was not saved.'); } }}><option value="">Choose bowler</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div></div>
           </div>
         </section>
 
