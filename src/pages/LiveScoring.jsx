@@ -222,16 +222,31 @@ export default function LiveScoring() {
     if (!battingTeam || !bowlingTeam || battingTeam === bowlingTeam || !striker || !nonStriker || striker === nonStriker || !bowler) {
       return toast.error('Choose two different teams, two different opening batters and a bowler.');
     }
+    const matchTeamIds = [idOf(match.team_a_c), idOf(match.team_b_c)];
+    const selectedStriker = (players ?? []).find(player => String(player.Id) === striker);
+    const selectedNonStriker = (players ?? []).find(player => String(player.Id) === nonStriker);
+    const selectedBowler = (players ?? []).find(player => String(player.Id) === bowler);
+    if (!matchTeamIds.includes(battingTeam) || !matchTeamIds.includes(bowlingTeam)) {
+      return toast.error('Only the two teams registered for this match can take part.');
+    }
+    if (idOf(selectedStriker?.squad_c) !== battingTeam || idOf(selectedNonStriker?.squad_c) !== battingTeam || idOf(selectedBowler?.squad_c) !== bowlingTeam) {
+      return toast.error('Opening batters must belong to the batting team and the bowler must belong to the bowling team.');
+    }
+    if ((players ?? []).length === 0) return toast.error('Load the registered team players before starting an innings.');
+    const number = (inningsRows ?? []).length + 1;
+    const previousInnings = (inningsRows ?? []).find(row => Number(row.innings_number_c) === number - 1);
+    if (number > 2) return toast.error('This match format currently supports two innings only.');
+    if (number > 1 && previousInnings?.status_c !== 'Completed') {
+      return toast.error('Complete the previous innings before starting the next one.');
+    }
+    if (number === 2 && (battingTeam !== idOf(previousInnings?.bowling_team_c) || bowlingTeam !== idOf(previousInnings?.batting_team_c))) {
+      return toast.error('The second innings must reverse the first innings batting and bowling teams.');
+    }
+    if (number === 1 && !matchTeamIds.includes(battingTeam)) {
+      return toast.error('The first innings must use one of the teams registered for this match.');
+    }
     setStarting(true);
     try {
-      const number = (inningsRows ?? []).length + 1;
-      const previousInnings = (inningsRows ?? []).find(row => Number(row.innings_number_c) === number - 1);
-      if (number > 1 && previousInnings?.status_c !== 'Completed') {
-        return toast.error('Complete the previous innings before starting the next one.');
-      }
-      if (number > 2) {
-        return toast.error('This match format currently supports two innings only.');
-      }
       const result = await sdk.table('innings_c').create({
         Name: `Innings ${number} · ${match.Name}`,
         match_c: id,
