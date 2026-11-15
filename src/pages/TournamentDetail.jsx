@@ -24,6 +24,56 @@ const FIELDS = ['Id', 'Name', 'status_c', 'format_c', 'location_c', 'start_date_
 const TEAM_FIELDS = ['Id', 'Name', 'tournament_c'];
 const MATCH_FIELDS = ['Id', 'Name', 'team_a_c', 'team_b_c', 'status_c', 'result_type_c', 'winner_team_c', 'overs_c'];
 const INNINGS_FIELDS = ['Id', 'match_c', 'batting_team_c', 'bowling_team_c', 'status_c', 'total_runs_c', 'wickets_c', 'legal_balls_c'];
+const DELIVERY_FIELDS = ['Id', 'innings_c', 'striker_c', 'bowler_c', 'batter_runs_c', 'extras_type_c', 'extras_runs_c', 'is_legal_ball_c', 'wicket_type_c'];
+const PLAYER_FIELDS = ['Id', 'Name', 'squad_c'];
+
+const idOf = value => String(value?.Id ?? value ?? '');
+
+function calculatePlayerLeaders(teams, players, deliveries) {
+  const teamNames = new Map((teams ?? []).map(team => [String(team.Id), team.Name]));
+  const playerMap = new Map((players ?? []).map(player => [String(player.Id), player]));
+  const batting = new Map();
+  const bowling = new Map();
+  const creditedWickets = new Set(['Bowled', 'Caught', 'LBW', 'Stumped', 'Hit wicket']);
+
+  (deliveries ?? []).forEach(ball => {
+    const strikerId = idOf(ball.striker_c);
+    const bowlerId = idOf(ball.bowler_c);
+    const type = ball.extras_type_c || 'None';
+    const batterRuns = Number(ball.batter_runs_c || 0);
+    const extras = Number(ball.extras_runs_c || 0);
+
+    if (strikerId) {
+      const row = batting.get(strikerId) || { playerId: strikerId, runs: 0, balls: 0, fours: 0, sixes: 0 };
+      row.runs += batterRuns;
+      if (type !== 'Wide' && type !== 'Penalty') row.balls += 1;
+      if (batterRuns === 4) row.fours += 1;
+      if (batterRuns === 6) row.sixes += 1;
+      batting.set(strikerId, row);
+    }
+
+    if (bowlerId) {
+      const row = bowling.get(bowlerId) || { playerId: bowlerId, balls: 0, runs: 0, wickets: 0 };
+      if (ball.is_legal_ball_c) row.balls += 1;
+      if (type === 'Wide' || type === 'No-ball') row.runs += extras + batterRuns;
+      else if (!['Bye', 'Leg-bye', 'Penalty'].includes(type)) row.runs += batterRuns;
+      if (creditedWickets.has(ball.wicket_type_c)) row.wickets += 1;
+      bowling.set(bowlerId, row);
+    }
+  });
+
+  const battingRows = [...batting.values()].map(row => {
+    const player = playerMap.get(row.playerId);
+    return { ...row, player, teamName: teamNames.get(idOf(player?.squad_c)) || 'Unknown team', strikeRate: row.balls ? row.runs / row.balls * 100 : 0 };
+  }).sort((a, b) => b.runs - a.runs || b.strikeRate - a.strikeRate);
+
+  const bowlingRows = [...bowling.values()].map(row => {
+    const player = playerMap.get(row.playerId);
+    return { ...row, player, teamName: teamNames.get(idOf(player?.squad_c)) || 'Unknown team', economy: row.balls ? row.runs / (row.balls / 6) : 0, overs: `${Math.floor(row.balls / 6)}.${row.balls % 6}` };
+  }).sort((a, b) => b.wickets - a.wickets || a.economy - b.economy);
+
+  return { batting: battingRows.slice(0, 10), bowling: bowlingRows.slice(0, 10) };
+}
 
 function calculateStandings(teams, matches, innings) {
   const rows = new Map((teams ?? []).map(team => [String(team.Id), {
