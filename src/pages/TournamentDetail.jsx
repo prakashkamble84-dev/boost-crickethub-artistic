@@ -35,43 +35,56 @@ function calculateStandings(teams, matches, innings) {
     const a = rows.get(String(match.team_a_c?.Id ?? match.team_a_c ?? ''));
     const b = rows.get(String(match.team_b_c?.Id ?? match.team_b_c ?? ''));
     if (!a || !b || a === b) return;
-    a.played += 1;
-    b.played += 1;
     if (match.status_c === 'Abandoned' || match.result_type_c === 'Abandoned') {
+      a.played += 1; b.played += 1;
       a.abandoned += 1; b.abandoned += 1;
       a.points += 1; b.points += 1;
-    } else if (match.result_type_c === 'No Result') {
+    } else if (match.status_c === 'Completed' && match.result_type_c === 'No Result') {
+      a.played += 1; b.played += 1;
       a.noResult += 1; b.noResult += 1;
       a.points += 1; b.points += 1;
-    } else if (match.result_type_c === 'Tie') {
+    } else if (match.status_c === 'Completed' && match.result_type_c === 'Tie') {
+      a.played += 1; b.played += 1;
       a.tied += 1; b.tied += 1;
       a.points += 1; b.points += 1;
-    } else if (match.result_type_c === 'Win') {
+    } else if (match.status_c === 'Completed' && match.result_type_c === 'Win') {
       const winnerId = String(match.winner_team_c?.Id ?? match.winner_team_c ?? '');
-      if (winnerId === String(a.team.Id)) { a.won += 1; a.points += 2; b.lost += 1; }
-      else if (winnerId === String(b.team.Id)) { b.won += 1; b.points += 2; a.lost += 1; }
+      if (winnerId === String(a.team.Id)) { a.played += 1; b.played += 1; a.won += 1; a.points += 2; b.lost += 1; }
+      else if (winnerId === String(b.team.Id)) { a.played += 1; b.played += 1; b.won += 1; b.points += 2; a.lost += 1; }
     }
   });
-  const validMatchIds = new Set((matches ?? []).filter(match => match.status_c === 'Completed' && ['Win', 'Tie'].includes(match.result_type_c)).map(match => String(match.Id)));
+  const eligibleMatches = new Map((matches ?? []).filter(match => match.status_c === 'Completed' && (match.result_type_c === 'Tie' || (match.result_type_c === 'Win' && [String(match.team_a_c?.Id ?? match.team_a_c ?? ''), String(match.team_b_c?.Id ?? match.team_b_c ?? '')].includes(String(match.winner_team_c?.Id ?? match.winner_team_c ?? ''))))).map(match => [String(match.Id), match]));
+  const inningsByMatch = new Map();
   (innings ?? []).forEach(frame => {
     const matchId = String(frame.match_c?.Id ?? frame.match_c ?? '');
-    if (!validMatchIds.has(matchId) || frame.status_c !== 'Completed') return;
-    const batting = rows.get(String(frame.batting_team_c?.Id ?? frame.batting_team_c ?? ''));
-    const bowling = rows.get(String(frame.bowling_team_c?.Id ?? frame.bowling_team_c ?? ''));
-    if (!batting || !bowling) return;
-    const match = (matches ?? []).find(item => String(item.Id) === matchId);
-    const quota = Math.max(0, Number(match?.overs_c || 0) * 6);
-    const legalBalls = Number(frame.legal_balls_c || 0);
-    const ballsFaced = Number(frame.wickets_c || 0) >= 10 && quota > 0 ? quota : legalBalls;
-    batting.runsFor += Number(frame.total_runs_c || 0);
-    batting.ballsFaced += ballsFaced;
-    bowling.runsAgainst += Number(frame.total_runs_c || 0);
-    bowling.ballsBowled += ballsFaced;
+    if (!eligibleMatches.has(matchId) || frame.status_c !== 'Completed') return;
+    if (!inningsByMatch.has(matchId)) inningsByMatch.set(matchId, []);
+    inningsByMatch.get(matchId).push(frame);
+  });
+  inningsByMatch.forEach((frames, matchId) => {
+    const match = eligibleMatches.get(matchId);
+    if (frames.length !== 2) return;
+    const aId = String(match.team_a_c?.Id ?? match.team_a_c ?? '');
+    const bId = String(match.team_b_c?.Id ?? match.team_b_c ?? '');
+    const battingIds = frames.map(frame => String(frame.batting_team_c?.Id ?? frame.batting_team_c ?? ''));
+    if (!battingIds.includes(aId) || !battingIds.includes(bId) || new Set(battingIds).size !== 2) return;
+    frames.forEach(frame => {
+      const batting = rows.get(String(frame.batting_team_c?.Id ?? frame.batting_team_c ?? ''));
+      const bowling = rows.get(String(frame.bowling_team_c?.Id ?? frame.bowling_team_c ?? ''));
+      if (!batting || !bowling) return;
+      const quota = Math.max(0, Number(match.overs_c || 0) * 6);
+      const legalBalls = Number(frame.legal_balls_c || 0);
+      const ballsFaced = Number(frame.wickets_c || 0) >= 10 && quota > 0 ? quota : legalBalls;
+      batting.runsFor += Number(frame.total_runs_c || 0);
+      batting.ballsFaced += ballsFaced;
+      bowling.runsAgainst += Number(frame.total_runs_c || 0);
+      bowling.ballsBowled += ballsFaced;
+    });
   });
   [...rows.values()].forEach(row => {
     row.nrr = row.ballsFaced > 0 && row.ballsBowled > 0
       ? row.runsFor / (row.ballsFaced / 6) - row.runsAgainst / (row.ballsBowled / 6)
-      : null;
+      : 0;
   });
   return [...rows.values()].sort((a, b) => b.points - a.points || b.nrr - a.nrr || b.won - a.won || a.team.Name.localeCompare(b.team.Name));
 }
