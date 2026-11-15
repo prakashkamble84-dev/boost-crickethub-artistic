@@ -72,7 +72,18 @@ function calculatePlayerLeaders(teams, players, deliveries) {
     return { ...row, player, teamName: teamNames.get(idOf(player?.squad_c)) || 'Unknown team', economy: row.balls ? row.runs / (row.balls / 6) : 0, overs: `${Math.floor(row.balls / 6)}.${row.balls % 6}` };
   }).sort((a, b) => b.wickets - a.wickets || a.economy - b.economy);
 
-  return { batting: battingRows.slice(0, 10), bowling: bowlingRows.slice(0, 10) };
+  const tiedLeaders = (rows, metric, direction = 'max') => {
+    if (!rows.length) return [];
+    const target = rows.reduce((best, row) => direction === 'min' ? Math.min(best, metric(row)) : Math.max(best, metric(row)), direction === 'min' ? Infinity : -Infinity);
+    return rows.filter(row => metric(row) === target);
+  };
+  const awards = [
+    { title: 'Leading run-scorer', detail: row => `${row.runs} runs`, winners: tiedLeaders(battingRows, row => row.runs) },
+    { title: 'Leading wicket-taker', detail: row => `${row.wickets} wickets`, winners: tiedLeaders(bowlingRows, row => row.wickets) },
+    { title: 'Best strike rate', detail: row => `${row.strikeRate.toFixed(2)} SR · ${row.balls} balls`, winners: tiedLeaders(battingRows.filter(row => row.balls >= 10), row => row.strikeRate) },
+    { title: 'Best bowling economy', detail: row => `${row.economy.toFixed(2)} economy · ${row.overs} overs`, winners: tiedLeaders(bowlingRows.filter(row => row.balls >= 12), row => row.economy, 'min') }
+  ];
+  return { batting: battingRows.slice(0, 10), bowling: bowlingRows.slice(0, 10), awards };
 }
 
 function calculateStandings(teams, matches, innings) {
