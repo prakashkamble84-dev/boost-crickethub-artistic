@@ -151,6 +151,7 @@ export default function LiveScoring() {
   const [dismissedPlayer, setDismissedPlayer] = useState('');
   const [fielder, setFielder] = useState('');
   const [saving, setSaving] = useState(false);
+  const [recoveryRequired, setRecoveryRequired] = useState(false);
   const [starting, setStarting] = useState(false);
   const [nextBatter, setNextBatter] = useState('');
   const [pendingResultAction, setPendingResultAction] = useState('');
@@ -277,6 +278,7 @@ export default function LiveScoring() {
 
   async function recordDelivery(event) {
     event.preventDefault();
+    if (recoveryRequired) return toast.error('Reload this page to reconcile the saved match state before scoring again.');
     const batRuns = Number(batterRuns);
     const extraRuns = Number(extrasRuns);
     if (!activeInnings || !striker || !nonStriker || !bowler || striker === nonStriker || !Number.isInteger(batRuns) || batRuns < 0 || batRuns > 6 || !Number.isInteger(extraRuns) || extraRuns < 0 || extraRuns > 10) {
@@ -390,16 +392,19 @@ export default function LiveScoring() {
   }
 
   async function undoLastDelivery() {
-    if (!activeInnings || !(deliveries ?? []).length || saving) return;
+    if (!activeInnings || !(deliveries ?? []).length || saving || recoveryRequired) return;
     const last = deliveries[deliveries.length - 1];
     const remaining = deliveries.slice(0, -1);
     const next = scoreDeliveries(remaining);
+    let deliveryRemoved = false;
     setSaving(true);
     try {
       const removed = await sdk.table('deliveries_c').remove(last.Id);
       if (!removed.data?.length) {
         return toast.error(removed.messages?.[0] || 'Could not undo the last delivery.');
       }
+      deliveryRemoved = true;
+      setRecoveryRequired(true);
       const updated = await sdk.table('innings_c').update({
         Id: activeInnings.Id,
         total_runs_c: next.runs,
@@ -414,18 +419,25 @@ export default function LiveScoring() {
         current_non_striker_c: idOf(last.non_striker_c),
         current_bowler_c: idOf(last.bowler_c)
       });
+      if (!updated.data?.length) {
+        toast.error('The delivery was removed, but the innings summary did not save. Reload this page before scoring again.');
+        await Promise.all([reloadDeliveries(), reloadInnings(), reloadMatch()]);
+        return;
+      }
       setStriker(idOf(last.striker_c));
       setNonStriker(idOf(last.non_striker_c));
       setBowler(idOf(last.bowler_c));
-      if (!updated.data?.length) {
-        toast.error('Delivery removed, but the innings summary needs a refresh.');
-      } else {
-        toast.success('Last delivery undone.');
-      }
-      reloadDeliveries();
-      reloadInnings();
+      setRecoveryRequired(false);
+      toast.success('Last delivery undone.');
+      await Promise.all([reloadDeliveries(), reloadInnings(), reloadMatch()]);
     } catch (error) {
-      toast.error(error.message || 'Could not undo the last delivery.');
+      if (deliveryRemoved) {
+        setRecoveryRequired(true);
+        toast.error('Undo partially completed. Scoring is locked until you reload and reconcile the saved match state.');
+        await Promise.all([reloadDeliveries(), reloadInnings(), reloadMatch()]);
+      } else {
+        toast.error(error.message || 'Could not undo the last delivery.');
+      }
     } finally {
       setSaving(false);
     }
@@ -546,6 +558,7 @@ export default function LiveScoring() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      {recoveryRequired ? <section role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-4"><p className="font-semibold text-destructive">Scoring paused: match state needs reconciliation</p><p className="mt-1 text-sm text-muted-foreground">An undo removed the delivery but the innings summary could not be confirmed. Reload the page to rebuild the displayed state from saved records before continuing.</p><Button className="mt-3" variant="outline" onClick={() => window.location.reload()}>Reload match state</Button></section> : null}
       <Button asChild variant="ghost" size="sm"><Link to={`/matches/${id}`}><ApperIcon name="ArrowLeft" size={16} /> Back to match</Link></Button>
       <header className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -588,7 +601,7 @@ export default function LiveScoring() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/40 px-5 py-3"><div><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Innings {activeInnings.innings_number_c}</p><h2 className="font-heading text-2xl font-bold uppercase">{activeInnings.batting_team_c?.Name || 'Batting team'}</h2></div><span className="rounded-full bg-success-muted px-3 py-1 text-xs font-bold text-success">LIVE</span></div>
           <div className="grid gap-4 p-5 sm:grid-cols-[1.3fr_1fr]">
             <div><p className="font-heading text-5xl font-bold tabular-nums">{score.runs}<span className="text-2xl text-muted-foreground">/{score.wickets}</span></p><p className="mt-1 text-sm text-muted-foreground">{oversText(score.legalBalls)} overs · {maxOvers} overs · Run rate {score.legalBalls ? (score.runs / (score.legalBalls / 6)).toFixed(2) : '0.00'}</p><p className="mt-3 text-sm text-muted-foreground">Extras {score.extras} · Wides {score.wides} · No-balls {score.noBalls} · Byes {score.byes} · Leg-byes {score.legByes}</p></div>
-            <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === striker))}</p></div><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Non-striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === nonStriker))}</p></div><div className="col-span-2 rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Bowler</p><select aria-label="Current bowler" className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2" value={bowler} onChange={async e => { const value = e.target.value; setBowler(value); try { const saved = await sdk.table('innings_c').update({ Id: activeInnings.Id, current_bowler_c: value }); if (!saved.data?.length) toast.error('Bowler selection was not saved.'); } catch (error) { toast.error(error.message || 'Bowler selection was not saved.'); } }}><option value="">Choose bowler</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div></div>
+            <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === striker))}</p></div><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Non-striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === nonStriker))}</p></div><div className="col-span-2 rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Bowler</p><select aria-label="Current bowler" disabled={recoveryRequired || saving} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2" value={bowler} onChange={async e => { const value = e.target.value; setBowler(value); try { const saved = await sdk.table('innings_c').update({ Id: activeInnings.Id, current_bowler_c: value }); if (!saved.data?.length) toast.error('Bowler selection was not saved.'); } catch (error) { toast.error(error.message || 'Bowler selection was not saved.'); } }}><option value="">Choose bowler</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div></div>
           </div>
         </section>
 
@@ -685,11 +698,11 @@ export default function LiveScoring() {
               <div className="space-y-2"><Label>Wicket</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={wicketType} onChange={e => setWicketType(e.target.value)}>{WICKETS.map(x => <option key={x}>{x}</option>)}</select></div>
               {wicketType !== 'None' ? <><div className="space-y-2"><Label>Dismissed batter</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={dismissedPlayer} onChange={e => setDismissedPlayer(e.target.value)}><option value="">Choose batter</option>{battingPlayers.filter(p => [striker, nonStriker].includes(String(p.Id))).map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div><div className="space-y-2"><Label>Fielder (if applicable)</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={fielder} onChange={e => setFielder(e.target.value)}><option value="">Not applicable</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div><div className="space-y-2"><Label>Next batter</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={nextBatter} onChange={e => setNextBatter(e.target.value)}><option value="">Choose after wicket</option>{availableBatters.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div></> : null}
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-xs text-muted-foreground">Wide and no-ball do not count as legal balls. Extras are added to the team total.</p><Button disabled={saving || deliveriesLoading || !striker || !nonStriker || !bowler || score.wickets >= 10 || score.legalBalls >= maxOvers * 6 || chaseWon}>{saving ? 'Saving…' : 'Record ball'}</Button></div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-xs text-muted-foreground">Wide and no-ball do not count as legal balls. Extras are added to the team total.</p><Button disabled={recoveryRequired || saving || deliveriesLoading || !striker || !nonStriker || !bowler || score.wickets >= 10 || score.legalBalls >= maxOvers * 6 || chaseWon}>{saving ? 'Saving…' : 'Record ball'}</Button></div>
           </section>
           <aside className="space-y-4">
             <section className="rounded-xl border border-border bg-card p-5"><h3 className="font-heading text-xl font-bold uppercase">This over</h3><div className="mt-3 flex flex-wrap gap-2">{(deliveries ?? []).filter(d => d.over_number_c === Math.floor(score.legalBalls / 6) + 1).map(d => <span key={d.Id} className="grid h-9 min-w-9 place-items-center rounded-md border border-border px-2 text-sm font-semibold">{d.wicket_type_c && d.wicket_type_c !== 'None' ? 'W' : d.extras_type_c === 'Wide' ? 'Wd' : d.extras_type_c === 'No-ball' ? 'Nb' : Number(d.batter_runs_c || 0) + Number(d.extras_runs_c || 0)}</span>)}{!(deliveries ?? []).some(d => d.over_number_c === Math.floor(score.legalBalls / 6) + 1) ? <p className="text-sm text-muted-foreground">No balls yet in this over.</p> : null}</div><p className="mt-3 text-sm text-muted-foreground">{overComplete ? 'Over complete. Change bowler before the next delivery.' : 'Ball-by-ball entries are saved as the scoring ledger.'}</p></section>
-            <section className="rounded-xl border border-border bg-card p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-heading text-xl font-bold uppercase">Delivery audit trail</h3><p className="mt-1 text-xs text-muted-foreground">{(deliveries ?? []).length} recorded entries · newest first</p></div><Button type="button" size="sm" variant="outline" disabled={saving || deliveriesLoading || !(deliveries ?? []).length} onClick={undoLastDelivery}>Undo last ball</Button></div><div className="mt-3 max-h-[480px] space-y-2 overflow-y-auto pr-1">{(deliveries ?? []).slice().reverse().map(d => <div key={d.Id} className="grid grid-cols-[52px_1fr_auto] items-start gap-2 border-b border-border pb-2 text-sm"><span className="font-semibold tabular-nums">{d.over_number_c}.{d.ball_number_c}</span><div className="min-w-0"><p className="truncate font-medium">{d.striker_c?.Name || 'Batter'} <span className="font-normal text-muted-foreground">vs {d.bowler_c?.Name || 'Bowler'}</span></p><p className="text-xs text-muted-foreground">{d.wicket_type_c && d.wicket_type_c !== 'None' ? `${d.wicket_type_c} · ${d.dismissed_player_c?.Name || 'Dismissed batter'}${d.fielder_c?.Name ? ` · ${d.fielder_c.Name}` : ''}` : d.extras_type_c && d.extras_type_c !== 'None' ? `${d.extras_type_c}: ${Number(d.extras_runs_c || 0)} extra${Number(d.extras_runs_c || 0) === 1 ? '' : 's'}` : 'Legal delivery'}</p></div><strong className="tabular-nums">{d.wicket_type_c && d.wicket_type_c !== 'None' ? 'W' : `+${Number(d.batter_runs_c || 0) + Number(d.extras_runs_c || 0)}`}</strong></div>)}{!(deliveries ?? []).length ? <p className="text-sm text-muted-foreground">The first delivery has not been recorded.</p> : null}</div><p className="mt-3 text-xs text-muted-foreground">Only the most recent delivery can currently be undone. Historical edits are intentionally disabled to avoid corrupting later batter and bowler state.</p></section>
+            <section className="rounded-xl border border-border bg-card p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-heading text-xl font-bold uppercase">Delivery audit trail</h3><p className="mt-1 text-xs text-muted-foreground">{(deliveries ?? []).length} recorded entries · newest first</p></div><Button type="button" size="sm" variant="outline" disabled={recoveryRequired || saving || deliveriesLoading || !(deliveries ?? []).length} onClick={undoLastDelivery}>Undo last ball</Button></div><div className="mt-3 max-h-[480px] space-y-2 overflow-y-auto pr-1">{(deliveries ?? []).slice().reverse().map(d => <div key={d.Id} className="grid grid-cols-[52px_1fr_auto] items-start gap-2 border-b border-border pb-2 text-sm"><span className="font-semibold tabular-nums">{d.over_number_c}.{d.ball_number_c}</span><div className="min-w-0"><p className="truncate font-medium">{d.striker_c?.Name || 'Batter'} <span className="font-normal text-muted-foreground">vs {d.bowler_c?.Name || 'Bowler'}</span></p><p className="text-xs text-muted-foreground">{d.wicket_type_c && d.wicket_type_c !== 'None' ? `${d.wicket_type_c} · ${d.dismissed_player_c?.Name || 'Dismissed batter'}${d.fielder_c?.Name ? ` · ${d.fielder_c.Name}` : ''}` : d.extras_type_c && d.extras_type_c !== 'None' ? `${d.extras_type_c}: ${Number(d.extras_runs_c || 0)} extra${Number(d.extras_runs_c || 0) === 1 ? '' : 's'}` : 'Legal delivery'}</p></div><strong className="tabular-nums">{d.wicket_type_c && d.wicket_type_c !== 'None' ? 'W' : `+${Number(d.batter_runs_c || 0) + Number(d.extras_runs_c || 0)}`}</strong></div>)}{!(deliveries ?? []).length ? <p className="text-sm text-muted-foreground">The first delivery has not been recorded.</p> : null}</div><p className="mt-3 text-xs text-muted-foreground">Only the most recent delivery can currently be undone. Historical edits are intentionally disabled to avoid corrupting later batter and bowler state.</p></section>
           </aside>
         </form>
       </> : <section className="rounded-xl border border-dashed border-border bg-card p-8 text-center"><ApperIcon name="PlayCircle" size={32} className="mx-auto text-muted-foreground" /><h2 className="mt-3 font-heading text-2xl font-bold uppercase">{inningsLoading ? 'Loading innings…' : 'Ready for the toss'}</h2><p className="mt-1 text-sm text-muted-foreground">{(inningsRows ?? []).length ? 'Previous innings are saved. Start the next innings when the teams are ready.' : 'Set the batting order and opening bowler to begin ball-by-ball scoring.'}</p>{!inningsLoading && !['Completed', 'Abandoned'].includes(match.status_c) ? <Button className="mt-4" onClick={() => { setBattingTeam(idOf(match.team_a_c)); setBowlingTeam(idOf(match.team_b_c)); setSetupOpen(true); }}>Set up innings</Button> : null}</section>}
