@@ -300,14 +300,25 @@ export default function LiveScoring() {
     if (!activeInnings || !striker || !nonStriker || !bowler || striker === nonStriker || !Number.isInteger(batRuns) || batRuns < 0 || batRuns > 6 || !Number.isInteger(extraRuns) || extraRuns < 0 || extraRuns > 10) {
       return toast.error('Check the batter, bowler and run values.');
     }
+    if (extrasType === 'None' && extraRuns !== 0) {
+      return toast.error('Choose an extras type before entering extras runs.');
+    }
     if (extrasType === 'Wide' && (batRuns !== 0 || extraRuns < 1)) {
       return toast.error('A wide must include at least one extra run and no batter runs.');
     }
-    if (extrasType === 'No-ball' && extraRuns < 0) {
-      return toast.error('Additional no-ball extras cannot be negative.');
+    if (extrasType === 'No-ball' && batRuns > 0 && extraRuns > 0) {
+      return toast.error('Enter batter runs or additional byes/leg-byes for a no-ball, not both.');
     }
     if (['Bye', 'Leg-bye'].includes(extrasType) && batRuns !== 0) {
       return toast.error('Bye and leg-bye runs must be entered as extras, not batter runs.');
+    }
+    const validWicketsForDelivery = extrasType === 'No-ball'
+      ? ['None', 'Run out', 'Obstructing field']
+      : extrasType === 'Wide'
+        ? ['None', 'Run out', 'Stumped', 'Hit wicket', 'Obstructing field']
+        : WICKETS;
+    if (!validWicketsForDelivery.includes(wicketType)) {
+      return toast.error(`A ${extrasType.toLowerCase()} cannot result in ${wicketType.toLowerCase()}.`);
     }
     if (wicketType === 'Retired out') return toast.error('Retired out is not a delivery dismissal. Use a dedicated retirement action when available.');
     const previous = deliveries ?? [];
@@ -719,7 +730,7 @@ export default function LiveScoring() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2"><Label>Extras type</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={extrasType} onChange={e => setExtrasType(e.target.value)}>{EXTRAS.map(x => <option key={x}>{x}</option>)}</select></div>
               <div className="space-y-2"><Label>{extrasType === 'No-ball' ? 'Additional byes / leg-byes' : 'Extras runs'}</Label><Input type="number" min="0" max="10" value={extrasRuns} onChange={e => setExtrasRuns(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Wicket</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={wicketType} onChange={e => setWicketType(e.target.value)}>{WICKETS.map(x => <option key={x}>{x}</option>)}</select></div>
+              <div className="space-y-2"><Label>Wicket</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={wicketType} onChange={e => setWicketType(e.target.value)}>{(extrasType === 'No-ball' ? ['None', 'Run out', 'Obstructing field'] : extrasType === 'Wide' ? ['None', 'Run out', 'Stumped', 'Hit wicket', 'Obstructing field'] : WICKETS).map(x => <option key={x}>{x}</option>)}</select></div>
               {wicketType !== 'None' ? <>{wicketType === 'Run out' ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={battersCrossed} onChange={e => setBattersCrossed(e.target.checked)} />Batters had crossed when the wicket was broken</label> : null}<div className="space-y-2"><Label>Dismissed batter</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={dismissedPlayer} onChange={e => setDismissedPlayer(e.target.value)}><option value="">Choose batter</option>{battingPlayers.filter(p => [striker, nonStriker].includes(String(p.Id))).map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div><div className="space-y-2"><Label>Fielder (if applicable)</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={fielder} onChange={e => setFielder(e.target.value)}><option value="">Not applicable</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div><div className="space-y-2"><Label>Next batter</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={nextBatter} onChange={e => setNextBatter(e.target.value)}><option value="">Choose after wicket</option>{availableBatters.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div></> : null}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-xs text-muted-foreground">Wide and no-ball do not count as legal balls. Extras are added to the team total.</p><Button disabled={recoveryRequired || saving || deliveriesLoading || !striker || !nonStriker || !bowler || score.wickets >= 10 || score.legalBalls >= maxOvers * 6 || chaseWon}>{saving ? 'Saving…' : 'Record ball'}</Button></div>
