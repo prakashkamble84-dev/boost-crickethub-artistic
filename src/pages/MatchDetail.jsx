@@ -42,6 +42,18 @@ export default function MatchDetail() {
     ? `${window.location.origin}/scoreboard/${scoreboardRow.public_key_c}`
     : '';
 
+  async function copyPublicScoreboardLink() {
+    if (!publicScoreboardUrl || !navigator.clipboard?.writeText) {
+      return toast.error('Clipboard access is unavailable in this browser.');
+    }
+    try {
+      await navigator.clipboard.writeText(publicScoreboardUrl);
+      toast.success('Public link copied.');
+    } catch {
+      toast.error('Could not copy link.');
+    }
+  }
+
   async function togglePublicScoreboard() {
     setSaving(true);
     try {
@@ -121,7 +133,7 @@ export default function MatchDetail() {
         {scoreboardRow?.is_published_c && publicScoreboardUrl ? (
           <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/50 p-3">
             <a href={publicScoreboardUrl} target="_blank" rel="noreferrer" className="min-w-0 flex-1 break-all text-sm text-primary underline">{publicScoreboardUrl}</a>
-            <Button size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(publicScoreboardUrl).then(() => toast.success('Public link copied.')).catch(() => toast.error('Could not copy link.'))}>Copy link</Button>
+            <Button size="sm" variant="outline" onClick={copyPublicScoreboardLink}>Copy link</Button>
           </div>
         ) : <p className="text-xs text-muted-foreground">Not published. Only published snapshots are visible to anonymous visitors.</p>}
       </section>

@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import { sdk } from '@/services/sdk';
 import { useFetch } from '@/hooks/useFetch';
 import { DetailSkeleton } from '@/components/PageSkeleton';
@@ -26,6 +26,11 @@ export default function PublicScoreboard() {
     if (!row?.is_published_c || !row.snapshot_json_c) return null;
     try { return JSON.parse(row.snapshot_json_c); } catch { return null; }
   }, [row]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => run(), 15000);
+    return () => window.clearInterval(intervalId);
+  }, [publicKey]);
 
   if (loading) return <div className="mx-auto max-w-4xl px-4 py-12"><DetailSkeleton /></div>;
   if (error || !snapshot) return (
