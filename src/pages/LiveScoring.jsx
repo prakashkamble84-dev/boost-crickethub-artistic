@@ -275,14 +275,20 @@ export default function LiveScoring() {
     if (['Bye', 'Leg-bye', 'Penalty'].includes(extrasType) && batRuns !== 0) {
       return toast.error('Bye, leg-bye and penalty runs must be entered as extras, not batter runs.');
     }
-    if (wicketType !== 'None' && (!dismissedPlayer || !nextBatter)) return toast.error('Choose the dismissed batter and the incoming batter.');
-    if (wicketType !== 'None' && ![striker, nonStriker].includes(dismissedPlayer)) return toast.error('The dismissed player must be one of the two active batters.');
-    if (wicketType !== 'None' && [striker, nonStriker].includes(nextBatter)) return toast.error('The incoming batter must be a different player.');
-    if (['Bowled', 'Caught', 'LBW', 'Stumped', 'Hit wicket'].includes(wicketType) && dismissedPlayer !== striker) return toast.error('This dismissal must be recorded against the striker.');
-    if (wicketType === 'Caught' && !fielder) return toast.error('Choose the fielder for a catch.');
-    const legal = extrasType !== 'Wide' && extrasType !== 'No-ball';
     const previous = deliveries ?? [];
     const current = scoreDeliveries(previous);
+    const isWicket = wicketType !== 'None';
+    const needsIncomingBatter = isWicket && current.wickets < 9;
+    if (isWicket && (!dismissedPlayer || (needsIncomingBatter && !nextBatter))) return toast.error('Choose the dismissed batter and, unless this is the tenth wicket, the incoming batter.');
+    if (isWicket && ![striker, nonStriker].includes(dismissedPlayer)) return toast.error('The dismissed player must be one of the two active batters.');
+    if (needsIncomingBatter && [striker, nonStriker].includes(nextBatter)) return toast.error('The incoming batter must be a different player.');
+    if (['Bowled', 'Caught', 'LBW', 'Stumped', 'Hit wicket'].includes(wicketType) && dismissedPlayer !== striker) return toast.error('This dismissal must be recorded against the striker.');
+    if (wicketType === 'Caught' && !fielder) return toast.error('Choose the fielder for a catch.');
+    const noBallInvalidDismissals = ['Bowled', 'Caught', 'LBW', 'Stumped', 'Hit wicket'];
+    const wideInvalidDismissals = ['Bowled', 'Caught', 'LBW', 'Hit wicket'];
+    if (extrasType === 'No-ball' && noBallInvalidDismissals.includes(wicketType)) return toast.error('That dismissal cannot be recorded from a no-ball.');
+    if (extrasType === 'Wide' && wideInvalidDismissals.includes(wicketType)) return toast.error('That dismissal cannot be recorded from a wide.');
+    const legal = extrasType !== 'Wide' && extrasType !== 'No-ball';
     const seq = previous.length + 1;
     const ballNo = current.legalBalls % 6 + 1;
     const overNo = Math.floor(current.legalBalls / 6) + 1;
