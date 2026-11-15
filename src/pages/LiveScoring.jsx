@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { sdk } from '@/services/sdk';
 import { useFetch } from '@/hooks/useFetch';
@@ -10,7 +10,7 @@ import { DetailSkeleton } from '@/components/PageSkeleton';
 import { toast } from 'sonner';
 
 const MATCH_FIELDS = ['Id', 'Name', 'team_a_c', 'team_b_c', 'overs_c', 'status_c'];
-const INNINGS_FIELDS = ['Id', 'Name', 'match_c', 'batting_team_c', 'bowling_team_c', 'innings_number_c', 'status_c', 'total_runs_c', 'wickets_c', 'legal_balls_c', 'wides_runs_c', 'no_balls_runs_c', 'byes_runs_c', 'leg_byes_runs_c', 'penalty_runs_c', 'target_runs_c'];
+const INNINGS_FIELDS = ['Id', 'Name', 'match_c', 'batting_team_c', 'bowling_team_c', 'innings_number_c', 'status_c', 'total_runs_c', 'wickets_c', 'legal_balls_c', 'wides_runs_c', 'no_balls_runs_c', 'byes_runs_c', 'leg_byes_runs_c', 'penalty_runs_c', 'target_runs_c', 'current_striker_c', 'current_non_striker_c', 'current_bowler_c'];
 const DELIVERY_FIELDS = ['Id', 'Name', 'innings_c', 'sequence_number_c', 'over_number_c', 'ball_number_c', 'striker_c', 'non_striker_c', 'bowler_c', 'batter_runs_c', 'extras_type_c', 'extras_runs_c', 'is_legal_ball_c', 'wicket_type_c', 'dismissed_player_c', 'fielder_c', 'notes_c'];
 const PLAYER_FIELDS = ['Id', 'Name', 'squad_c', 'jersey_number_c', 'role_c'];
 const EXTRAS = ['None', 'Wide', 'No-ball', 'Bye', 'Leg-bye', 'Penalty'];
@@ -162,7 +162,7 @@ export default function LiveScoring() {
       if (!result.data?.length) return toast.error(result.messages?.[0] || 'Delivery was not saved.');
       const updatedRows = [...previous, result.data[0]];
       const next = scoreDeliveries(updatedRows);
-      const update = await sdk.table('innings_c').update({
+      let newStriker = striker;\n      let newNonStriker = nonStriker;\n      const runningExtras = extrasType === 'Wide' || extrasType === 'No-ball' ? Math.max(0, extraRuns - 1) : extraRuns;\n      const completedRuns = batRuns + (['Bye', 'Leg-bye', 'Wide', 'No-ball'].includes(extrasType) ? runningExtras : 0);\n      if (completedRuns % 2 === 1) [newStriker, newNonStriker] = [newNonStriker, newStriker];\n      if (legal && next.legalBalls % 6 === 0) [newStriker, newNonStriker] = [newNonStriker, newStriker];\n      if (wicketType !== 'None') {\n        if (dismissedPlayer === newStriker) newStriker = nextBatter;\n        else if (dismissedPlayer === newNonStriker) newNonStriker = nextBatter;\n      }\n      const update = await sdk.table('innings_c').update({
         Id: activeInnings.Id,
         total_runs_c: next.runs,
         wickets_c: next.wickets,
