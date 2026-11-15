@@ -83,9 +83,15 @@ function buildScorecards(rows, battingPlayers, bowlingPlayers) {
         ? `c ${fielderName} b ${bowlerName || 'bowler'}`
         : wicketType === 'Run out' && fielderName
           ? `run out (${fielderName})`
-          : wicketType === 'Run out' || wicketType === 'Obstructing field' || wicketType === 'Retired out'
+          : wicketType === 'Run out' || wicketType === 'Obstructing field'
             ? wicketType.toLowerCase()
-            : `b ${bowlerName || 'bowler'}`;
+            : wicketType === 'LBW'
+              ? `lbw b ${bowlerName || 'bowler'}`
+              : wicketType === 'Stumped'
+                ? `st ${fielderName || 'wicketkeeper'} b ${bowlerName || 'bowler'}`
+                : wicketType === 'Hit wicket'
+                  ? `hit wicket b ${bowlerName || 'bowler'}`
+                  : `b ${bowlerName || 'bowler'}`;
       dismissed.dismissal = detail;
       dismissals.set(dismissedId, detail);
       batters.set(dismissedId, dismissed);
