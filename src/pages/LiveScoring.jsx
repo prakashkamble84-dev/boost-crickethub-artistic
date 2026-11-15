@@ -337,7 +337,8 @@ export default function LiveScoring() {
     const needsIncomingBatter = isWicket && current.wickets < 9;
     if (isWicket && (!dismissedPlayer || (needsIncomingBatter && !nextBatter))) return toast.error('Choose the dismissed batter and, unless this is the tenth wicket, the incoming batter.');
     if (isWicket && ![striker, nonStriker].includes(dismissedPlayer)) return toast.error('The dismissed player must be one of the two active batters.');
-    if (needsIncomingBatter && [striker, nonStriker].includes(nextBatter)) return toast.error('The incoming batter must be a different player.');
+    if (needsIncomingBatter && [striker, nonStriker, dismissedPlayer].includes(nextBatter)) return toast.error('The incoming batter must be a different, not-yet-dismissed player.');
+    if (needsIncomingBatter && dismissedBatterIds.has(nextBatter)) return toast.error('A previously dismissed batter cannot return as the incoming batter.');
     if (['Bowled', 'Caught', 'LBW', 'Stumped', 'Hit wicket'].includes(wicketType) && dismissedPlayer !== striker) return toast.error('This dismissal must be recorded against the striker.');
     if (wicketType === 'Caught' && !fielder) return toast.error('Choose the fielder for a catch.');
     const noBallInvalidDismissals = ['Bowled', 'Caught', 'LBW', 'Stumped', 'Hit wicket'];
