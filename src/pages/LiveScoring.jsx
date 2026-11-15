@@ -277,6 +277,12 @@ export default function LiveScoring() {
     }
     const previous = deliveries ?? [];
     const current = scoreDeliveries(previous);
+    if (current.legalBalls > 0 && current.legalBalls % 6 === 0) {
+      const lastLegalDelivery = [...previous].reverse().find(ball => ball.is_legal_ball_c);
+      if (lastLegalDelivery && idOf(lastLegalDelivery.bowler_c) === bowler) {
+        return toast.error('A bowler cannot bowl consecutive overs. Select a different bowler before continuing.');
+      }
+    }
     const isWicket = wicketType !== 'None';
     const needsIncomingBatter = isWicket && current.wickets < 9;
     if (isWicket && (!dismissedPlayer || (needsIncomingBatter && !nextBatter))) return toast.error('Choose the dismissed batter and, unless this is the tenth wicket, the incoming batter.');
@@ -385,10 +391,12 @@ export default function LiveScoring() {
         leg_byes_runs_c: next.legByes,
         penalty_runs_c: next.penalties,
         current_striker_c: idOf(last.striker_c),
-        current_non_striker_c: idOf(last.non_striker_c)
+        current_non_striker_c: idOf(last.non_striker_c),
+        current_bowler_c: idOf(last.bowler_c)
       });
       setStriker(idOf(last.striker_c));
       setNonStriker(idOf(last.non_striker_c));
+      setBowler(idOf(last.bowler_c));
       if (!updated.data?.length) {
         toast.error('Delivery removed, but the innings summary needs a refresh.');
       } else {
