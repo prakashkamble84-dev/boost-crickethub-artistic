@@ -14,8 +14,8 @@ const MATCH_FIELDS = ['Id', 'Name', 'team_a_c', 'team_b_c', 'overs_c', 'status_c
 const INNINGS_FIELDS = ['Id', 'Name', 'match_c', 'batting_team_c', 'bowling_team_c', 'innings_number_c', 'status_c', 'total_runs_c', 'wickets_c', 'legal_balls_c', 'wides_runs_c', 'no_balls_runs_c', 'byes_runs_c', 'leg_byes_runs_c', 'penalty_runs_c', 'target_runs_c', 'current_striker_c', 'current_non_striker_c', 'current_bowler_c'];
 const DELIVERY_FIELDS = ['Id', 'Name', 'innings_c', 'sequence_number_c', 'over_number_c', 'ball_number_c', 'striker_c', 'non_striker_c', 'bowler_c', 'batter_runs_c', 'extras_type_c', 'extras_runs_c', 'is_legal_ball_c', 'wicket_type_c', 'dismissed_player_c', 'fielder_c', 'notes_c'];
 const PLAYER_FIELDS = ['Id', 'Name', 'squad_c', 'jersey_number_c', 'role_c'];
-const EXTRAS = ['None', 'Wide', 'No-ball', 'Bye', 'Leg-bye', 'Penalty'];
-const WICKETS = ['None', 'Bowled', 'Caught', 'LBW', 'Run out', 'Stumped', 'Hit wicket', 'Obstructing field', 'Retired out'];
+const EXTRAS = ['None', 'Wide', 'No-ball', 'Bye', 'Leg-bye'];
+const WICKETS = ['None', 'Bowled', 'Caught', 'LBW', 'Run out', 'Stumped', 'Hit wicket', 'Obstructing field'];
 
 const { eq } = window.ApperSDK.CoreSDK;
 const idOf = (v) => String(v?.Id ?? v ?? '');
@@ -273,9 +273,10 @@ export default function LiveScoring() {
     if (extrasType === 'No-ball' && extraRuns < 1) {
       return toast.error('A no-ball must include at least one extra run.');
     }
-    if (['Bye', 'Leg-bye', 'Penalty'].includes(extrasType) && batRuns !== 0) {
-      return toast.error('Bye, leg-bye and penalty runs must be entered as extras, not batter runs.');
+    if (['Bye', 'Leg-bye'].includes(extrasType) && batRuns !== 0) {
+      return toast.error('Bye and leg-bye runs must be entered as extras, not batter runs.');
     }
+    if (wicketType === 'Retired out') return toast.error('Retired out is not a delivery dismissal. Use a dedicated retirement action when available.');
     const previous = deliveries ?? [];
     const current = scoreDeliveries(previous);
     if (current.legalBalls > 0 && current.legalBalls % 6 === 0) {
