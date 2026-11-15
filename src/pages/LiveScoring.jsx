@@ -348,10 +348,11 @@ export default function LiveScoring() {
         current_bowler_c: bowler
       });
       if (!update.data?.length) {
-        toast.error('Ball saved, but the innings summary did not update. Refresh before continuing.');
-      } else {
-        toast.success('Delivery recorded.');
+        toast.error('Ball saved, but the innings state did not update. Scoring is paused until the saved state is reloaded.');
+        await Promise.all([reloadDeliveries(), reloadInnings(), reloadMatch()]);
+        return;
       }
+      toast.success('Delivery recorded.');
       setStriker(newStriker);
       setNonStriker(newNonStriker);
       setNextBatter('');
@@ -361,9 +362,7 @@ export default function LiveScoring() {
       setWicketType('None');
       setDismissedPlayer('');
       setFielder('');
-      reloadDeliveries();
-      reloadInnings();
-      reloadMatch();
+      await Promise.all([reloadDeliveries(), reloadInnings(), reloadMatch()]);
     } catch (e) {
       toast.error(e.message || 'Could not record delivery.');
     } finally {
