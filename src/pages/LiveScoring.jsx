@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { DetailSkeleton } from '@/components/PageSkeleton';
 import { toast } from 'sonner';
 
-const MATCH_FIELDS = ['Id', 'Name', 'team_a_c', 'team_b_c', 'overs_c', 'status_c'];
+const MATCH_FIELDS = ['Id', 'Name', 'team_a_c', 'team_b_c', 'overs_c', 'status_c', 'result_type_c', 'winner_team_c', 'result_margin_c', 'result_summary_c'];
 const INNINGS_FIELDS = ['Id', 'Name', 'match_c', 'batting_team_c', 'bowling_team_c', 'innings_number_c', 'status_c', 'total_runs_c', 'wickets_c', 'legal_balls_c', 'wides_runs_c', 'no_balls_runs_c', 'byes_runs_c', 'leg_byes_runs_c', 'penalty_runs_c', 'target_runs_c', 'current_striker_c', 'current_non_striker_c', 'current_bowler_c'];
 const DELIVERY_FIELDS = ['Id', 'Name', 'innings_c', 'sequence_number_c', 'over_number_c', 'ball_number_c', 'striker_c', 'non_striker_c', 'bowler_c', 'batter_runs_c', 'extras_type_c', 'extras_runs_c', 'is_legal_ball_c', 'wicket_type_c', 'dismissed_player_c', 'fielder_c', 'notes_c'];
 const PLAYER_FIELDS = ['Id', 'Name', 'squad_c', 'jersey_number_c', 'role_c'];
@@ -240,8 +240,10 @@ export default function LiveScoring() {
       });
       if (!result.data?.length) return toast.error(result.messages?.[0] || 'Could not start innings.');
       setSetupOpen(false);
+      await sdk.table('matches_c').update({ Id: id, status_c: 'Live' });
       toast.success(`Innings ${number} started.`);
       reloadInnings();
+      reloadMatch();
     } catch (e) {
       toast.error(e.message || 'Could not start innings.');
     } finally {
@@ -388,13 +390,50 @@ export default function LiveScoring() {
   }
 
   async function completeInnings() {
-    if (!activeInnings) return;
+    if (!activeInnings || saving) return;
     setSaving(true);
     try {
-      const result = await sdk.table('innings_c').update({ Id: activeInnings.Id, status_c: 'Completed' });
-      if (!result.data?.length) return toast.error(result.messages?.[0] || 'Could not complete innings.');
-      toast.success('Innings completed.');
+      const completed = await sdk.table('innings_c').update({ Id: activeInnings.Id, status_c: 'Completed' });
+      if (!completed.data?.length) return toast.error(completed.messages?.[0] || 'Could not complete innings.');
+
+      if (Number(activeInnings.innings_number_c) === 1) {
+        await sdk.table('matches_c').update({ Id: id, status_c: 'Live' });
+        toast.success('First innings completed. Set up the second innings.');
+      } else {
+        const first = (inningsRows ?? []).find(row => Number(row.innings_number_c) === 1);
+        const firstRuns = Number(first?.total_runs_c || 0);
+        const secondRuns = score.runs;
+        let resultType = 'Win';
+        let winnerId = '';
+        let margin = 0;
+        let summary = '';
+
+        if (secondRuns === firstRuns) {
+          resultType = 'Tie';
+          summary = 'Match tied';
+        } else if (secondRuns > firstRuns) {
+          winnerId = idOf(activeInnings.batting_team_c);
+          margin = Math.max(0, 10 - score.wickets);
+          summary = `${activeInnings.batting_team_c?.Name || 'Chasing team'} won by ${margin} wicket${margin === 1 ? '' : 's'}`;
+        } else {
+          winnerId = idOf(activeInnings.bowling_team_c);
+          margin = firstRuns - secondRuns;
+          summary = `${activeInnings.bowling_team_c?.Name || 'Defending team'} won by ${margin} run${margin === 1 ? '' : 's'}`;
+        }
+
+        const matchResult = await sdk.table('matches_c').update({
+          Id: id,
+          status_c: 'Completed',
+          result_type_c: resultType,
+          winner_team_c: winnerId || null,
+          result_margin_c: margin,
+          result_summary_c: summary
+        });
+        if (!matchResult.data?.length) return toast.error(matchResult.messages?.[0] || 'Innings completed, but match result could not be saved. Refresh and retry.');
+        toast.success(summary);
+      }
       reloadInnings();
+      reloadMatch();
     } catch (e) {
       toast.error(e.message || 'Could not complete innings.');
     } finally {
@@ -414,8 +453,10 @@ export default function LiveScoring() {
           <h1 className="mt-2 font-heading text-4xl font-bold uppercase">{match.Name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{match.team_a_c?.Name} vs {match.team_b_c?.Name} · {match.overs_c} overs per innings</p>
         </div>
-        {!activeInnings ? <Button onClick={() => { setBattingTeam(idOf(match.team_a_c)); setBowlingTeam(idOf(match.team_b_c)); setSetupOpen(true); }}>Start innings</Button> : <Button variant="outline" disabled={saving} onClick={completeInnings}>Complete innings</Button>}
+        {!activeInnings && match.status_c !== 'Completed' ? <Button onClick={() => { setBattingTeam(idOf(match.team_a_c)); setBowlingTeam(idOf(match.team_b_c)); setSetupOpen(true); }}>Start innings</Button> : activeInnings ? <Button variant="outline" disabled={saving} onClick={completeInnings}>{saving ? 'Saving…' : Number(activeInnings.innings_number_c) === 2 ? 'Finalize match' : 'Complete innings'}</Button> : <span className="rounded-full bg-success-muted px-3 py-2 text-sm font-semibold text-success">MATCH COMPLETED</span>}
       </header>
+
+      {match.status_c === 'Completed' && match.result_summary_c ? <section className="rounded-xl border border-primary/30 bg-primary/5 p-5"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Match result</p><h2 className="mt-1 font-heading text-2xl font-bold">{match.result_summary_c}</h2><p className="mt-1 text-sm text-muted-foreground">{match.result_type_c === 'Tie' ? 'Scores level after both innings.' : `${match.winner_team_c?.Name || 'Winning team'} · ${match.result_margin_c} ${Number(match.result_margin_c) === 1 ? 'unit' : 'units'}`}</p></section> : null}
 
       {setupOpen ? <form onSubmit={startInnings} className="grid gap-4 rounded-xl border border-border bg-card p-5 sm:grid-cols-2">
         <div className="sm:col-span-2"><h2 className="font-heading text-2xl font-bold uppercase">Innings setup</h2><p className="text-sm text-muted-foreground">Set the batting order and opening bowler before the first ball.</p></div>
