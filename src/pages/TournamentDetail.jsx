@@ -289,6 +289,20 @@ export default function TournamentDetail() {
         <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground">Points: win 2 · tie 1 · no result 1 · abandoned 1 · loss 0. Ranking: points, net run rate, wins, then team name. NRR excludes no-result and abandoned matches; all-out innings use the full overs quota.</div>
       </section>
       <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="border-b border-border px-5 py-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-primary">Awards race</p>
+          <h2 className="mt-1 font-heading text-xl font-bold uppercase">Tournament awards</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Provisional leaders based on recorded deliveries. Tied leaders are shown jointly.</p>
+        </div>
+        {deliveriesError || playersError ? <div className="p-5 text-sm text-destructive">Awards could not be calculated: {deliveriesError?.message || playersError?.message}</div> : deliveriesLoading || playersLoading || inningsLoading || teamsLoading ? <div className="p-8 text-center text-sm text-muted-foreground">Calculating awards…</div> : <div className="grid gap-3 p-5 sm:grid-cols-2">
+          {playerLeaders.awards.map(award => <div key={award.title} className="rounded-lg border border-border p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{award.title}</p>
+            {award.winners.length ? <div className="mt-2 space-y-2">{award.winners.map(row => <div key={row.playerId} className="flex items-start justify-between gap-3"><div><p className="font-semibold">{row.player?.Name || 'Unknown player'}</p><p className="text-xs text-muted-foreground">{row.teamName}</p></div><p className="shrink-0 text-sm font-bold tabular-nums">{award.detail(row)}</p></div>)}</div> : <p className="mt-2 text-sm text-muted-foreground">Not qualified yet</p>}
+          </div>)}
+        </div>}
+        <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground">Best strike rate requires at least 10 balls faced. Best bowling economy requires at least 2 legal overs. These are live statistical leaders, not a subjective Player of the Tournament decision.</div>
+      </section>
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-primary">Player performance</p>
