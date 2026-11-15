@@ -38,12 +38,17 @@ async function clearTable(table) {
     const ids = (res.data ?? []).map((row) => row.Id);
     if (ids.length === 0) return removed;
     const del = await sdk.table(table).remove(ids);
-    if (del.messages.length) {
-      console.error(`${table} remove failed: ${del.messages.join('; ')}`);
-      throw new Error(del.messages[0]);
-    }
-    if (!del.data.length) throw new Error(`No rows removed from ${table}`);
     removed += del.data.length;
+    if (!del.data.length && !del.messages.length) throw new Error(`No rows removed from ${table}`);
+    if (del.messages.length) {
+      const check = await sdk.table(table).select(['Id']).page(1, BATCH_SIZE).fetch();
+      if (!check.success) throw new Error(check.message);
+      const stillPresent = (check.data ?? []).some((row) => ids.some((id) => String(id) === String(row.Id)));
+      if (stillPresent) {
+        console.error(`${table} remove failed: ${del.messages.join('; ')}`);
+        throw new Error(del.messages[0]);
+      }
+    }
   }
 }
 
