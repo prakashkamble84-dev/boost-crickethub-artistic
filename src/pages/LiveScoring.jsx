@@ -43,6 +43,96 @@ function oversText(balls) {
   return `${Math.floor(balls / 6)}.${balls % 6}`;
 }
 
+function buildScorecards(rows, battingPlayers, bowlingPlayers) {
+  const batters = new Map();
+  const bowlers = new Map();
+  const dismissals = new Map();
+  const overFigures = new Map();
+  const creditedWickets = new Set(['Bowled', 'Caught', 'LBW', 'Stumped', 'Hit wicket']);
+
+  rows.forEach(ball => {
+    const strikerId = idOf(ball.striker_c);
+    const nonStrikerId = idOf(ball.non_striker_c);
+    const bowlerId = idOf(ball.bowler_c);
+    const type = ball.extras_type_c || 'None';
+    const batterRuns = Number(ball.batter_runs_c || 0);
+    const extras = Number(ball.extras_runs_c || 0);
+    const wicketType = ball.wicket_type_c || 'None';
+
+    [strikerId, nonStrikerId].forEach(playerId => {
+      if (playerId && !batters.has(playerId)) {
+        batters.set(playerId, { playerId, runs: 0, balls: 0, fours: 0, sixes: 0, dismissal: 'not out' });
+      }
+    });
+
+    if (strikerId) {
+      const batter = batters.get(strikerId);
+      batter.runs += batterRuns;
+      if (type !== 'Wide' && type !== 'Penalty') batter.balls += 1;
+      if (batterRuns === 4) batter.fours += 1;
+      if (batterRuns === 6) batter.sixes += 1;
+    }
+
+    if (ball.dismissed_player_c && wicketType !== 'None') {
+      const dismissedId = idOf(ball.dismissed_player_c);
+      const dismissed = batters.get(dismissedId) || { playerId: dismissedId, runs: 0, balls: 0, fours: 0, sixes: 0, dismissal: 'not out' };
+      const fielderName = ball.fielder_c?.Name;
+      const bowlerName = ball.bowler_c?.Name;
+      const detail = wicketType === 'Caught' && fielderName
+        ? `c ${fielderName} b ${bowlerName || 'bowler'}`
+        : wicketType === 'Run out' && fielderName
+          ? `run out (${fielderName})`
+          : wicketType === 'Run out' || wicketType === 'Obstructing field' || wicketType === 'Retired out'
+            ? wicketType.toLowerCase()
+            : `b ${bowlerName || 'bowler'}`;
+      dismissed.dismissal = detail;
+      dismissals.set(dismissedId, detail);
+      batters.set(dismissedId, dismissed);
+    }
+
+    if (bowlerId) {
+      if (!bowlers.has(bowlerId)) {
+        bowlers.set(bowlerId, { playerId: bowlerId, balls: 0, runs: 0, wickets: 0 });
+      }
+      const bowler = bowlers.get(bowlerId);
+      if (ball.is_legal_ball_c) bowler.balls += 1;
+      if (type === 'Wide' || type === 'No-ball') bowler.runs += extras + batterRuns;
+      else if (type !== 'Bye' && type !== 'Leg-bye' && type !== 'Penalty') bowler.runs += batterRuns;
+      if (creditedWickets.has(wicketType)) bowler.wickets += 1;
+
+      const overKey = `${bowlerId}:${ball.over_number_c}`;
+      if (!overFigures.has(overKey)) overFigures.set(overKey, { bowlerId, over: Number(ball.over_number_c), legalBalls: 0, conceded: 0 });
+      const over = overFigures.get(overKey);
+      if (ball.is_legal_ball_c) over.legalBalls += 1;
+      if (type === 'Wide' || type === 'No-ball') over.conceded += extras + batterRuns;
+      else if (type !== 'Bye' && type !== 'Leg-bye' && type !== 'Penalty') over.conceded += batterRuns;
+    }
+  });
+
+  const maidenCounts = new Map();
+  overFigures.forEach(over => {
+    if (over.legalBalls === 6 && over.conceded === 0) {
+      maidenCounts.set(over.bowlerId, (maidenCounts.get(over.bowlerId) || 0) + 1);
+    }
+  });
+
+  const playerName = (list, playerId) => list.find(player => String(player.Id) === String(playerId));
+  const batting = [...batters.values()].map(item => ({
+    ...item,
+    player: playerName(battingPlayers, item.playerId),
+    strikeRate: item.balls ? (item.runs / item.balls * 100).toFixed(2) : '0.00'
+  }));
+  const bowling = [...bowlers.values()].map(item => ({
+    ...item,
+    player: playerName(bowlingPlayers, item.playerId),
+    maidens: maidenCounts.get(item.playerId) || 0,
+    overs: oversText(item.balls),
+    economy: item.balls ? (item.runs / (item.balls / 6)).toFixed(2) : '0.00'
+  }));
+
+  return { batting, bowling };
+}
+
 export const route = { path: '/matches/:id/score', layout: 'owner', access: 'authenticated' };
 
 export default function LiveScoring() {
@@ -84,6 +174,7 @@ export default function LiveScoring() {
   const score = useMemo(() => scoreDeliveries(deliveries ?? []), [deliveries]);
   const battingPlayers = (players ?? []).filter(p => idOf(p.squad_c) === idOf(activeInnings?.batting_team_c));
   const bowlingPlayers = (players ?? []).filter(p => idOf(p.squad_c) === idOf(activeInnings?.bowling_team_c));
+  const scorecards = useMemo(() => buildScorecards(deliveries ?? [], battingPlayers, bowlingPlayers), [deliveries, battingPlayers, bowlingPlayers]);
   const availableBatters = battingPlayers.filter(p => ![striker, nonStriker].includes(String(p.Id)));
   const maxOvers = Number(match?.overs_c || 20);
   const overComplete = score.legalBalls > 0 && score.legalBalls % 6 === 0;
@@ -306,6 +397,78 @@ export default function LiveScoring() {
           <div className="grid gap-4 p-5 sm:grid-cols-[1.3fr_1fr]">
             <div><p className="font-heading text-5xl font-bold tabular-nums">{score.runs}<span className="text-2xl text-muted-foreground">/{score.wickets}</span></p><p className="mt-1 text-sm text-muted-foreground">{oversText(score.legalBalls)} overs · {maxOvers} overs · Run rate {score.legalBalls ? (score.runs / (score.legalBalls / 6)).toFixed(2) : '0.00'}</p><p className="mt-3 text-sm text-muted-foreground">Extras {score.extras} · Wides {score.wides} · No-balls {score.noBalls} · Byes {score.byes} · Leg-byes {score.legByes}</p></div>
             <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === striker))}</p></div><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Non-striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === nonStriker))}</p></div><div className="col-span-2 rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Bowler</p><select aria-label="Current bowler" className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2" value={bowler} onChange={async e => { const value = e.target.value; setBowler(value); try { const saved = await sdk.table('innings_c').update({ Id: activeInnings.Id, current_bowler_c: value }); if (!saved.data?.length) toast.error('Bowler selection was not saved.'); } catch (error) { toast.error(error.message || 'Bowler selection was not saved.'); } }}><option value="">Choose bowler</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div></div>
+          </div>
+        </section>
+
+        <section className="grid gap-5 lg:grid-cols-2">
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="font-heading text-xl font-bold uppercase">Batting scorecard</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Runs · balls · boundaries · strike rate</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[480px] text-sm">
+                <thead className="bg-muted/40 text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">Batter</th>
+                    <th className="px-2 py-3 text-right font-semibold">R</th>
+                    <th className="px-2 py-3 text-right font-semibold">B</th>
+                    <th className="px-2 py-3 text-right font-semibold">4s</th>
+                    <th className="px-2 py-3 text-right font-semibold">6s</th>
+                    <th className="px-4 py-3 text-right font-semibold">SR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scorecards.batting.map(row => (
+                    <tr key={row.playerId} className="border-t border-border">
+                      <td className="px-4 py-3">
+                        <p className="font-semibold">{row.player ? labelOf(row.player) : 'Unknown batter'}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{row.dismissal}</p>
+                      </td>
+                      <td className="px-2 py-3 text-right font-bold tabular-nums">{row.runs}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{row.balls}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{row.fours}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{row.sixes}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{row.strikeRate}</td>
+                    </tr>
+                  ))}
+                  {!scorecards.batting.length ? <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">Batting figures appear after the first delivery.</td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="font-heading text-xl font-bold uppercase">Bowling figures</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Overs · maidens · runs · wickets · economy</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[420px] text-sm">
+                <thead className="bg-muted/40 text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">Bowler</th>
+                    <th className="px-2 py-3 text-right font-semibold">O</th>
+                    <th className="px-2 py-3 text-right font-semibold">M</th>
+                    <th className="px-2 py-3 text-right font-semibold">R</th>
+                    <th className="px-2 py-3 text-right font-semibold">W</th>
+                    <th className="px-4 py-3 text-right font-semibold">Econ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scorecards.bowling.map(row => (
+                    <tr key={row.playerId} className="border-t border-border">
+                      <td className="px-4 py-3 font-semibold">{row.player ? labelOf(row.player) : 'Unknown bowler'}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{row.overs}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{row.maidens}</td>
+                      <td className="px-2 py-3 text-right tabular-nums">{row.runs}</td>
+                      <td className="px-2 py-3 text-right font-bold tabular-nums">{row.wickets}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{row.economy}</td>
+                    </tr>
+                  ))}
+                  {!scorecards.bowling.length ? <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">Bowling figures appear after the first delivery.</td></tr> : null}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
 
