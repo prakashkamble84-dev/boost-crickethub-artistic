@@ -279,6 +279,10 @@ export default function LiveScoring() {
     if (wicketType === 'Retired out') return toast.error('Retired out is not a delivery dismissal. Use a dedicated retirement action when available.');
     const previous = deliveries ?? [];
     const current = scoreDeliveries(previous);
+    const inningsBallLimit = Math.max(0, Number(match?.overs_c || 0) * 6);
+    if (current.wickets >= 10) return toast.error('The innings has ended: all ten wickets have fallen.');
+    if (inningsBallLimit > 0 && current.legalBalls >= inningsBallLimit) return toast.error('The allotted overs are complete. Finalize the innings before recording another delivery.');
+    if (Number(activeInnings.innings_number_c) === 2 && Number(activeInnings.target_runs_c || 0) > 0 && current.runs >= Number(activeInnings.target_runs_c)) return toast.error('The target has been reached. Finalize the innings to record the result.');
     if (current.legalBalls > 0 && current.legalBalls % 6 === 0) {
       const lastLegalDelivery = [...previous].reverse().find(ball => ball.is_legal_ball_c);
       if (lastLegalDelivery && idOf(lastLegalDelivery.bowler_c) === bowler) {
