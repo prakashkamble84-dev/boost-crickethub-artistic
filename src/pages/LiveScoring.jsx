@@ -171,10 +171,32 @@ export default function LiveScoring() {
     if (!r.success) throw new Error(r.message);
     return r.data;
   }), []);
+  const inningsKey = (inningsRows ?? []).map(row => row.Id).join('|');
+  const { data: allMatchDeliveries } = useFetch(async () => {
+    const batches = await Promise.all((inningsRows ?? []).map(async row => {
+      const result = await sdk.table('deliveries_c').select(DELIVERY_FIELDS).where(eq('innings_c', row.Id)).orderBy('sequence_number_c').fetch();
+      if (!result.success) throw new Error(result.message);
+      return result.data ?? [];
+    }));
+    return batches.flat();
+  }, [inningsKey]);
   const score = useMemo(() => scoreDeliveries(deliveries ?? []), [deliveries]);
   const battingPlayers = (players ?? []).filter(p => idOf(p.squad_c) === idOf(activeInnings?.batting_team_c));
   const bowlingPlayers = (players ?? []).filter(p => idOf(p.squad_c) === idOf(activeInnings?.bowling_team_c));
   const scorecards = useMemo(() => buildScorecards(deliveries ?? [], battingPlayers, bowlingPlayers), [deliveries, battingPlayers, bowlingPlayers]);
+  const completedInnings = (inningsRows ?? []).filter(row => row.status_c === 'Completed');
+  const historicalScorecards = useMemo(() => completedInnings.map(row => {
+    const rows = (allMatchDeliveries ?? []).filter(ball => idOf(ball.innings_c) === String(row.Id));
+    const batters = (players ?? []).filter(player => idOf(player.squad_c) === idOf(row.batting_team_c));
+    const bowlers = (players ?? []).filter(player => idOf(player.squad_c) === idOf(row.bowling_team_c));
+    return { innings: row, score: scoreDeliveries(rows), figures: buildScorecards(rows, batters, bowlers) };
+  }), [completedInnings, allMatchDeliveries, players]);
+  const firstInnings = (inningsRows ?? []).find(row => Number(row.innings_number_c) === 1);
+  const target = Number(activeInnings?.target_runs_c || (Number(activeInnings?.innings_number_c) === 2 ? Number(firstInnings?.total_runs_c || 0) + 1 : 0));
+  const runsNeeded = target > 0 ? Math.max(0, target - score.runs) : null;
+  const ballsRemaining = Math.max(0, maxOvers * 6 - score.legalBalls);
+  const chaseWon = target > 0 && score.runs >= target;
+  const chaseLost = target > 0 && (score.wickets >= 10 || ballsRemaining === 0) && !chaseWon;
   const availableBatters = battingPlayers.filter(p => ![striker, nonStriker].includes(String(p.Id)));
   const maxOvers = Number(match?.overs_c || 20);
   const overComplete = score.legalBalls > 0 && score.legalBalls % 6 === 0;
@@ -206,7 +228,8 @@ export default function LiveScoring() {
         legal_balls_c: 0,
         current_striker_c: striker,
         current_non_striker_c: nonStriker,
-        current_bowler_c: bowler
+        current_bowler_c: bowler,
+        target_runs_c: number === 2 ? Number((inningsRows ?? []).find(row => Number(row.innings_number_c) === 1)?.total_runs_c || 0) + 1 : null
       });
       if (!result.data?.length) return toast.error(result.messages?.[0] || 'Could not start innings.');
       setSetupOpen(false);
@@ -400,6 +423,17 @@ export default function LiveScoring() {
           </div>
         </section>
 
+        {target > 0 ? <section className="rounded-xl border border-border bg-card p-5">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Second innings · target {target}</p>
+              <h2 className="mt-1 font-heading text-3xl font-bold">{chaseWon ? 'Target reached' : chaseLost ? 'Chase closed' : `${runsNeeded} runs needed`}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{chaseWon ? `${activeInnings.batting_team_c?.Name || 'Batting team'} have reached the target.` : chaseLost ? 'The innings has reached its limit before the target was reached.' : `${ballsRemaining} legal balls remaining · Required rate ${ballsRemaining ? (runsNeeded / (ballsRemaining / 6)).toFixed(2) : '—'}`}</p>
+            </div>
+            <p className="font-heading text-2xl font-bold tabular-nums">{score.runs}/{score.wickets}<span className="ml-2 text-sm font-normal text-muted-foreground">of {target - 1}</span></p>
+          </div>
+        </section> : null}
+
         <section className="grid gap-5 lg:grid-cols-2">
           <div className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="border-b border-border px-5 py-4">
@@ -482,7 +516,7 @@ export default function LiveScoring() {
               <div className="space-y-2"><Label>Wicket</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={wicketType} onChange={e => setWicketType(e.target.value)}>{WICKETS.map(x => <option key={x}>{x}</option>)}</select></div>
               {wicketType !== 'None' ? <><div className="space-y-2"><Label>Dismissed batter</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={dismissedPlayer} onChange={e => setDismissedPlayer(e.target.value)}><option value="">Choose batter</option>{battingPlayers.filter(p => [striker, nonStriker].includes(String(p.Id))).map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div><div className="space-y-2"><Label>Fielder (if applicable)</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={fielder} onChange={e => setFielder(e.target.value)}><option value="">Not applicable</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div><div className="space-y-2"><Label>Next batter</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={nextBatter} onChange={e => setNextBatter(e.target.value)}><option value="">Choose after wicket</option>{availableBatters.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div></> : null}
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-xs text-muted-foreground">Wide and no-ball do not count as legal balls. Extras are added to the team total.</p><Button disabled={saving || deliveriesLoading || !striker || !nonStriker || !bowler || score.wickets >= 10 || score.legalBalls >= maxOvers * 6}>{saving ? 'Saving…' : 'Record ball'}</Button></div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-xs text-muted-foreground">Wide and no-ball do not count as legal balls. Extras are added to the team total.</p><Button disabled={saving || deliveriesLoading || !striker || !nonStriker || !bowler || score.wickets >= 10 || score.legalBalls >= maxOvers * 6 || chaseWon}>{saving ? 'Saving…' : 'Record ball'}</Button></div>
           </section>
           <aside className="space-y-4">
             <section className="rounded-xl border border-border bg-card p-5"><h3 className="font-heading text-xl font-bold uppercase">This over</h3><div className="mt-3 flex flex-wrap gap-2">{(deliveries ?? []).filter(d => d.over_number_c === Math.floor(score.legalBalls / 6) + 1).map(d => <span key={d.Id} className="grid h-9 min-w-9 place-items-center rounded-md border border-border px-2 text-sm font-semibold">{d.wicket_type_c && d.wicket_type_c !== 'None' ? 'W' : d.extras_type_c === 'Wide' ? 'Wd' : d.extras_type_c === 'No-ball' ? 'Nb' : Number(d.batter_runs_c || 0) + Number(d.extras_runs_c || 0)}</span>)}{!(deliveries ?? []).some(d => d.over_number_c === Math.floor(score.legalBalls / 6) + 1) ? <p className="text-sm text-muted-foreground">No balls yet in this over.</p> : null}</div><p className="mt-3 text-sm text-muted-foreground">{overComplete ? 'Over complete. Change bowler before the next delivery.' : 'Ball-by-ball entries are saved as the scoring ledger.'}</p></section>
@@ -490,6 +524,31 @@ export default function LiveScoring() {
           </aside>
         </form>
       </> : <section className="rounded-xl border border-dashed border-border bg-card p-8 text-center"><ApperIcon name="PlayCircle" size={32} className="mx-auto text-muted-foreground" /><h2 className="mt-3 font-heading text-2xl font-bold uppercase">{inningsLoading ? 'Loading innings…' : 'Ready for the toss'}</h2><p className="mt-1 text-sm text-muted-foreground">{(inningsRows ?? []).length ? 'Previous innings are saved. Start the next innings when the teams are ready.' : 'Set the batting order and opening bowler to begin ball-by-ball scoring.'}</p>{!inningsLoading ? <Button className="mt-4" onClick={() => { setBattingTeam(idOf(match.team_a_c)); setBowlingTeam(idOf(match.team_b_c)); setSetupOpen(true); }}>Set up innings</Button> : null}</section>}
+      {historicalScorecards.map(item => <section key={item.innings.Id} className="space-y-4 rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Completed innings {item.innings.innings_number_c}</p>
+            <h2 className="font-heading text-2xl font-bold uppercase">{item.innings.batting_team_c?.Name || 'Batting team'}</h2>
+          </div>
+          <p className="font-heading text-3xl font-bold tabular-nums">{item.score.runs}/{item.score.wickets}<span className="ml-2 text-sm font-normal text-muted-foreground">({oversText(item.score.legalBalls)} overs)</span></p>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="overflow-x-auto">
+            <h3 className="mb-2 text-sm font-bold uppercase tracking-wide">Batting</h3>
+            <table className="w-full min-w-[420px] text-sm">
+              <thead className="text-xs text-muted-foreground"><tr><th className="py-2 text-left">Batter</th><th className="px-2 text-right">R</th><th className="px-2 text-right">B</th><th className="px-2 text-right">4s</th><th className="px-2 text-right">6s</th><th className="text-right">SR</th></tr></thead>
+              <tbody>{item.figures.batting.map(row => <tr key={row.playerId} className="border-t border-border"><td className="py-2"><p className="font-medium">{row.player ? labelOf(row.player) : 'Unknown batter'}</p><p className="text-xs text-muted-foreground">{row.dismissal}</p></td><td className="px-2 text-right tabular-nums">{row.runs}</td><td className="px-2 text-right tabular-nums">{row.balls}</td><td className="px-2 text-right tabular-nums">{row.fours}</td><td className="px-2 text-right tabular-nums">{row.sixes}</td><td className="text-right tabular-nums">{row.strikeRate}</td></tr>)}</tbody>
+            </table>
+          </div>
+          <div className="overflow-x-auto">
+            <h3 className="mb-2 text-sm font-bold uppercase tracking-wide">Bowling</h3>
+            <table className="w-full min-w-[360px] text-sm">
+              <thead className="text-xs text-muted-foreground"><tr><th className="py-2 text-left">Bowler</th><th className="px-2 text-right">O</th><th className="px-2 text-right">M</th><th className="px-2 text-right">R</th><th className="px-2 text-right">W</th><th className="text-right">Econ</th></tr></thead>
+              <tbody>{item.figures.bowling.map(row => <tr key={row.playerId} className="border-t border-border"><td className="py-2 font-medium">{row.player ? labelOf(row.player) : 'Unknown bowler'}</td><td className="px-2 text-right tabular-nums">{row.overs}</td><td className="px-2 text-right tabular-nums">{row.maidens}</td><td className="px-2 text-right tabular-nums">{row.runs}</td><td className="px-2 text-right tabular-nums">{row.wickets}</td><td className="text-right tabular-nums">{row.economy}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </div>
+      </section>)}
     </div>
   );
 }
