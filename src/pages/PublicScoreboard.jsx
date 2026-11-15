@@ -30,7 +30,7 @@ export default function PublicScoreboard() {
   useEffect(() => {
     const intervalId = window.setInterval(() => run(), 15000);
     return () => window.clearInterval(intervalId);
-  }, [publicKey]);
+  }, [publicKey, run]);
 
   if (loading) return <div className="mx-auto max-w-4xl px-4 py-12"><DetailSkeleton /></div>;
   if (error || !snapshot) return (
