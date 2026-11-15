@@ -24,7 +24,7 @@ const FIELDS = ['Id', 'Name', 'status_c', 'format_c', 'location_c', 'start_date_
 const TEAM_FIELDS = ['Id', 'Name', 'tournament_c'];
 const MATCH_FIELDS = ['Id', 'Name', 'team_a_c', 'team_b_c', 'status_c', 'result_type_c', 'winner_team_c', 'overs_c'];
 const INNINGS_FIELDS = ['Id', 'match_c', 'batting_team_c', 'bowling_team_c', 'status_c', 'total_runs_c', 'wickets_c', 'legal_balls_c'];
-const DELIVERY_FIELDS = ['Id', 'innings_c', 'striker_c', 'bowler_c', 'batter_runs_c', 'extras_type_c', 'extras_runs_c', 'is_legal_ball_c', 'wicket_type_c'];
+const DELIVERY_FIELDS = ['Id', 'innings_c', 'striker_c', 'bowler_c', 'batter_runs_c', 'extras_type_c', 'extras_runs_c', 'no_ball_penalty_runs_c', 'is_legal_ball_c', 'wicket_type_c'];
 const PLAYER_FIELDS = ['Id', 'Name', 'squad_c'];
 
 const idOf = value => String(value?.Id ?? value ?? '');
@@ -55,7 +55,8 @@ function calculatePlayerLeaders(teams, players, deliveries) {
     if (bowlerId) {
       const row = bowling.get(bowlerId) || { playerId: bowlerId, balls: 0, runs: 0, wickets: 0 };
       if (ball.is_legal_ball_c) row.balls += 1;
-      if (type === 'Wide' || type === 'No-ball') row.runs += extras + batterRuns;
+      if (type === 'Wide') row.runs += extras + batterRuns;
+      else if (type === 'No-ball') row.runs += (ball.no_ball_penalty_runs_c != null ? Number(ball.no_ball_penalty_runs_c || 0) : extras) + batterRuns;
       else if (!['Bye', 'Leg-bye', 'Penalty'].includes(type)) row.runs += batterRuns;
       if (creditedWickets.has(ball.wicket_type_c)) row.wickets += 1;
       bowling.set(bowlerId, row);
