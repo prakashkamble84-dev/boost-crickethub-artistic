@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DetailSkeleton } from '@/components/PageSkeleton';
 import { toast } from 'sonner';
+import { refreshPublishedScoreboard } from '@/services/publicScoreboard';
 
 const MATCH_FIELDS = ['Id', 'Name', 'team_a_c', 'team_b_c', 'overs_c', 'status_c', 'result_type_c', 'winner_team_c', 'result_margin_c', 'result_summary_c'];
 const INNINGS_FIELDS = ['Id', 'Name', 'match_c', 'batting_team_c', 'bowling_team_c', 'innings_number_c', 'status_c', 'total_runs_c', 'wickets_c', 'legal_balls_c', 'wides_runs_c', 'no_balls_runs_c', 'byes_runs_c', 'leg_byes_runs_c', 'penalty_runs_c', 'target_runs_c', 'current_striker_c', 'current_non_striker_c', 'current_bowler_c'];
@@ -208,6 +209,11 @@ export default function LiveScoring() {
     setNonStriker(idOf(activeInnings.current_non_striker_c));
     setBowler(idOf(activeInnings.current_bowler_c));
   }, [activeInnings?.Id]);
+
+  useEffect(() => {
+    if (!match || !inningsRows) return;
+    refreshPublishedScoreboard(id).catch(() => {});
+  }, [id, match?.status_c, inningsKey, deliveries?.length, activeInnings?.total_runs_c, activeInnings?.wickets_c, activeInnings?.legal_balls_c, activeInnings?.status_c]);
 
   async function startInnings(event) {
     event.preventDefault();

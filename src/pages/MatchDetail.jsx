@@ -9,7 +9,9 @@ import { Label } from '@/components/ui/label';
 import { DetailSkeleton } from '@/components/PageSkeleton';
 import { toast } from 'sonner';
 import { formatLocalDate, DATE_FORMATS } from '@/utils/date';
+import { publishMatchScoreboard, unpublishMatchScoreboard } from '@/services/publicScoreboard';
 
+const { eq } = window.ApperSDK.CoreSDK;
 const FIELDS = ['Id', 'Name', 'tournament_c', 'team_a_c', 'team_b_c', 'match_date_c', 'start_time_c', 'venue_c', 'overs_c', 'status_c'];
 
 export const route = { path: '/matches/:id', layout: 'owner', access: 'authenticated' };
@@ -28,6 +30,40 @@ export default function MatchDetail() {
     if (!r.success) throw new Error(r.message);
     return r.data;
   }), [id]);
+  const { data: scoreboardRow, run: reloadScoreboard } = useFetch(() => sdk.table('public_match_scoreboards_c')
+    .select(['Id', 'public_key_c', 'is_published_c'])
+    .where(eq('match_c', id))
+    .fetch()
+    .then((r) => {
+      if (!r.success) throw new Error(r.message);
+      return r.data?.[0] ?? null;
+    }), [id]);
+  const publicScoreboardUrl = scoreboardRow?.public_key_c
+    ? `${window.location.origin}/scoreboard/${scoreboardRow.public_key_c}`
+    : '';
+
+  async function togglePublicScoreboard() {
+    setSaving(true);
+    try {
+      if (scoreboardRow?.is_published_c) {
+        await unpublishMatchScoreboard(id);
+        toast.success('Public scoreboard unpublished.');
+      } else {
+        const result = await publishMatchScoreboard(id);
+        toast.success('Public scoreboard published.');
+        const url = `${window.location.origin}/scoreboard/${result.publicKey}`;
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(url);
+          toast.success('Public link copied to clipboard.');
+        }
+      }
+      reloadScoreboard();
+    } catch (e) {
+      toast.error(e.message || 'Could not update public scoreboard.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   function beginEdit() {
     setName(match.Name || '');
@@ -72,6 +108,23 @@ export default function MatchDetail() {
       <Button variant="ghost" size="sm" asChild><Link to="/matches"><ApperIcon name="ArrowLeft" size={16} /> Back to Fixtures</Link></Button>
       <section className="flex flex-col gap-4 border-l-4 border-l-primary pl-5 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Fixture details</p><h1 className="mt-2 font-heading text-4xl font-bold uppercase">{match.Name}</h1><p className="mt-2 text-sm text-muted-foreground">{match.tournament_c?.Name || 'Tournament'}</p></div><div className="flex flex-wrap gap-2"><Button asChild><Link to={`/matches/${id}/score`}><ApperIcon name="Activity" size={15} /> Live scoring</Link></Button><Button variant="outline" onClick={beginEdit}><ApperIcon name="Pencil" size={15} /> Edit fixture</Button><Button variant="destructive" onClick={remove}><ApperIcon name="Trash2" size={15} /> Delete</Button></div></section>
       <div className="grid gap-4 rounded-xl border border-border bg-card p-5 sm:grid-cols-2"><div className="sm:col-span-2"><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Matchup</p><p className="mt-2 font-heading text-3xl font-bold">{match.team_a_c?.Name || 'Team A'} <span className="text-muted-foreground">vs</span> {match.team_b_c?.Name || 'Team B'}</p></div><div><p className="text-xs text-muted-foreground">Date & start time</p><p className="mt-1 font-semibold">{formatLocalDate(match.match_date_c, DATE_FORMATS.SHORT)} · {match.start_time_c || 'Time not set'}</p></div><div><p className="text-xs text-muted-foreground">Venue</p><p className="mt-1 font-semibold">{match.venue_c || 'Not set'}</p></div><div><p className="text-xs text-muted-foreground">Overs per innings</p><p className="mt-1 font-semibold tabular-nums">{match.overs_c}</p></div><div><p className="text-xs text-muted-foreground">Status</p><p className="mt-1 font-semibold">{match.status_c}</p></div></div>
+      <section className="space-y-3 rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-xl font-bold uppercase">Public live scoreboard</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Share a no-login scoreboard without exposing private organizer records.</p>
+          </div>
+          <Button variant={scoreboardRow?.is_published_c ? 'destructive' : 'default'} disabled={saving} onClick={togglePublicScoreboard}>
+            {saving ? 'Saving…' : scoreboardRow?.is_published_c ? 'Unpublish scoreboard' : 'Publish scoreboard'}
+          </Button>
+        </div>
+        {scoreboardRow?.is_published_c && publicScoreboardUrl ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/50 p-3">
+            <a href={publicScoreboardUrl} target="_blank" rel="noreferrer" className="min-w-0 flex-1 break-all text-sm text-primary underline">{publicScoreboardUrl}</a>
+            <Button size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(publicScoreboardUrl).then(() => toast.success('Public link copied.')).catch(() => toast.error('Could not copy link.'))}>Copy link</Button>
+          </div>
+        ) : <p className="text-xs text-muted-foreground">Not published. Only published snapshots are visible to anonymous visitors.</p>}
+      </section>
       {editing ? <form onSubmit={save} className="grid gap-4 rounded-xl border border-border bg-card p-5 sm:grid-cols-2"><h2 className="font-heading text-xl font-bold uppercase sm:col-span-2">Edit fixture details</h2><div className="space-y-2"><Label htmlFor="name">Match title</Label><Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Panthers vs Strikers" required /></div><div className="space-y-2"><Label htmlFor="date">Match date</Label><Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></div><div className="space-y-2"><Label htmlFor="time">Start time</Label><Input id="time" value={time} onChange={(e) => setTime(e.target.value)} placeholder="e.g. 7:30 PM" /></div><div className="space-y-2"><Label htmlFor="venue">Venue</Label><Input id="venue" value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Ground or stadium name" /></div><div className="space-y-2"><Label htmlFor="overs">Overs per innings</Label><Input id="overs" type="number" min="1" max="50" value={overs} onChange={(e) => setOvers(e.target.value)} required /></div><div className="flex justify-end gap-2 sm:col-span-2"><Button type="button" variant="outline" onClick={() => setEditing(false)}>Cancel</Button><Button disabled={saving}>{saving ? 'Saving…' : 'Save fixture'}</Button></div></form> : null}
       <div className="rounded-xl border border-dashed border-border p-5"><div className="flex items-center gap-2"><ApperIcon name="UserRoundCheck" size={18} className="text-highlight" /><h2 className="font-semibold">Scorer access</h2></div><p className="mt-2 text-sm text-muted-foreground">This fixture is ready to be assigned to a scorer. Scorer invitations and their access restrictions are part of the remaining Phase 2 work and are not enabled yet.</p></div>
     </div>
