@@ -175,6 +175,25 @@ export default function TournamentDetail() {
     }));
     return batches.flat();
   }, [matchKey]);
+  const inningsKey = (innings ?? []).map(frame => frame.Id).join('|');
+  const { data: tournamentDeliveries, loading: deliveriesLoading, error: deliveriesError, run: reloadDeliveries } = useFetch(async () => {
+    const batches = await Promise.all((innings ?? []).map(async frame => {
+      const result = await sdk.table('deliveries_c').select(DELIVERY_FIELDS).where(eq('innings_c', frame.Id)).fetch();
+      if (!result.success) throw new Error(result.message);
+      return result.data ?? [];
+    }));
+    return batches.flat();
+  }, [inningsKey]);
+  const teamKey = (teams ?? []).map(team => team.Id).join('|');
+  const { data: tournamentPlayers, loading: playersLoading, error: playersError, run: reloadPlayers } = useFetch(async () => {
+    const batches = await Promise.all((teams ?? []).map(async team => {
+      const result = await sdk.table('players_c').select(PLAYER_FIELDS).where(eq('squad_c', team.Id)).fetch();
+      if (!result.success) throw new Error(result.message);
+      return result.data ?? [];
+    }));
+    return batches.flat();
+  }, [teamKey]);
+  const playerLeaders = useMemo(() => calculatePlayerLeaders(teams, tournamentPlayers, tournamentDeliveries), [teams, tournamentPlayers, tournamentDeliveries]);
   const standings = useMemo(() => calculateStandings(teams, matches, innings), [teams, matches, innings]);
 
   async function removeTournament() {
