@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { sdk } from '@/services/sdk';
 import { useFetch } from '@/hooks/useFetch';
@@ -37,6 +38,7 @@ export default function Matches() {
   const [time, setTime] = useState('');
   const [venue, setVenue] = useState('');
   const [overs, setOvers] = useState('10');
+  const user = useSelector((state) => state.user.user);
   const { data, loading, error, run } = useFetch(() => {
     let q = sdk.table('matches_c').select(MATCH_FIELDS);
     if (search.trim()) q = q.where(contains('Name', search.trim()));
@@ -77,7 +79,8 @@ export default function Matches() {
         start_time_c: time.trim(),
         venue_c: venue.trim(),
         overs_c: Number(overs),
-        status_c: 'Scheduled'
+        status_c: 'Scheduled',
+        Owner: user?.Id
       });
       if (!result.data?.length) return toast.error(result.messages?.[0] || result.message || 'Fixture could not be created.');
       toast.success('Fixture created.');

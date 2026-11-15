@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { sdk } from '@/services/sdk';
 import { useFetch } from '@/hooks/useFetch';
 import ApperIcon from '@/components/ApperIcon';
@@ -34,6 +35,7 @@ const emptyForm = {
 export default function TournamentForm({ recordId = null, mode = 'create' }) {
   const navigate = useNavigate();
   const [form, setForm] = useState(emptyForm);
+  const user = useSelector((state) => state.user.user);
   const [saving, setSaving] = useState(false);
   const { data: record, loading, error, run } = useFetch(() => {
     if (!recordId) return Promise.resolve(null);
@@ -100,7 +102,7 @@ export default function TournamentForm({ recordId = null, mode = 'create' }) {
     try {
       const result = mode === 'edit'
         ? await sdk.table('tournaments_c').update({ Id: recordId, ...payload })
-        : await sdk.table('tournaments_c').create(payload);
+        : await sdk.table('tournaments_c').create({ ...payload, Owner: user?.Id });
       if (!result.data?.length) {
         toast.error(result.messages?.[0] || result.message || 'Tournament could not be saved.');
         return;

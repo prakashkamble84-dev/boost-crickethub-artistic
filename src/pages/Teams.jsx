@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { sdk } from '@/services/sdk';
 import { useFetch } from '@/hooks/useFetch';
@@ -24,6 +25,7 @@ export default function Teams() {
   const [tournament, setTournament] = useState('');
   const [captain, setCaptain] = useState('');
   const [contact, setContact] = useState('');
+  const user = useSelector((state) => state.user.user);
   const { data, loading, error, run } = useFetch(() => {
     let q = sdk.table('squads_c').select(TEAM_FIELDS);
     if (search.trim()) q = q.where(contains('Name', search.trim()));
@@ -43,7 +45,7 @@ export default function Teams() {
     setSaving(true);
     try {
       const selected = (tournaments ?? []).find((item) => String(item.Id) === String(tournament));
-      const result = await sdk.table('squads_c').create({ Name: name.trim(), tournament_c: tournament, captain_c: captain.trim(), contact_c: contact.trim() });
+      const result = await sdk.table('squads_c').create({ Name: name.trim(), tournament_c: tournament, captain_c: captain.trim(), contact_c: contact.trim(), Owner: user?.Id });
       if (!result.data?.length) return toast.error(result.messages?.[0] || result.message || 'Team could not be created.');
       toast.success('Team created.');
       setName('');

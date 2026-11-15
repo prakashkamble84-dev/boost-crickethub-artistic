@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSelector } from 'react-redux';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { sdk } from '@/services/sdk';
 import { useFetch } from '@/hooks/useFetch';
@@ -27,6 +28,7 @@ export default function TeamDetail() {
   const [jersey, setJersey] = useState('');
   const [role, setRole] = useState('All-rounder');
   const [saving, setSaving] = useState(false);
+  const user = useSelector((state) => state.user.user);
   const { data: team, loading, error, run } = useFetch(() => sdk.table('squads_c').select(TEAM_FIELDS).get(id).then((r) => {
     if (!r.success) throw new Error(r.message);
     return r.data;
@@ -88,7 +90,7 @@ export default function TeamDetail() {
       const payload = { Name: playerName.trim(), squad_c: id, jersey_number_c: jersey === '' ? null : Number(jersey), role_c: role };
       const result = playerEditing
         ? await sdk.table('players_c').update({ Id: playerEditing.Id, ...payload })
-        : await sdk.table('players_c').create(payload);
+        : await sdk.table('players_c').create({ ...payload, Owner: user?.Id });
       if (!result.data?.length) return toast.error(result.messages?.[0] || result.message || 'Player could not be saved.');
       toast.success(playerEditing ? 'Player updated.' : 'Player added.');
       setPlayerName('');
