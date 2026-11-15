@@ -211,7 +211,12 @@ export default function LiveScoring() {
     setStriker(idOf(activeInnings.current_striker_c));
     setNonStriker(idOf(activeInnings.current_non_striker_c));
     setBowler(idOf(activeInnings.current_bowler_c));
-  }, [activeInnings?.Id]);
+  }, [
+    activeInnings?.Id,
+    idOf(activeInnings?.current_striker_c),
+    idOf(activeInnings?.current_non_striker_c),
+    idOf(activeInnings?.current_bowler_c)
+  ]);
 
   useEffect(() => {
     if (!match || !inningsRows) return;
