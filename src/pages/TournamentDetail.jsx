@@ -22,11 +22,13 @@ import { toast } from 'sonner';
 const { eq } = window.ApperSDK.CoreSDK;
 const FIELDS = ['Id', 'Name', 'status_c', 'format_c', 'location_c', 'start_date_c', 'end_date_c', 'overs_c', 'teams_count_c', 'is_public_c', 'description_c'];
 const TEAM_FIELDS = ['Id', 'Name', 'tournament_c'];
-const MATCH_FIELDS = ['Id', 'Name', 'team_a_c', 'team_b_c', 'status_c', 'result_type_c', 'winner_team_c'];
+const MATCH_FIELDS = ['Id', 'Name', 'team_a_c', 'team_b_c', 'status_c', 'result_type_c', 'winner_team_c', 'overs_c'];
+const INNINGS_FIELDS = ['Id', 'match_c', 'batting_team_c', 'bowling_team_c', 'status_c', 'total_runs_c', 'wickets_c', 'legal_balls_c'];
 
-function calculateStandings(teams, matches) {
+function calculateStandings(teams, matches, innings) {
   const rows = new Map((teams ?? []).map(team => [String(team.Id), {
-    team, played: 0, won: 0, lost: 0, tied: 0, noResult: 0, abandoned: 0, points: 0
+    team, played: 0, won: 0, lost: 0, tied: 0, noResult: 0, abandoned: 0, points: 0,
+    runsFor: 0, ballsFaced: 0, runsAgainst: 0, ballsBowled: 0, nrr: null
   }]));
   (matches ?? []).forEach(match => {
     if (!['Completed', 'Abandoned'].includes(match.status_c)) return;
@@ -50,7 +52,28 @@ function calculateStandings(teams, matches) {
       else if (winnerId === String(b.team.Id)) { b.won += 1; b.points += 2; a.lost += 1; }
     }
   });
-  return [...rows.values()].sort((a, b) => b.points - a.points || b.won - a.won || a.team.Name.localeCompare(b.team.Name));
+  const validMatchIds = new Set((matches ?? []).filter(match => match.status_c === 'Completed' && ['Win', 'Tie'].includes(match.result_type_c)).map(match => String(match.Id)));
+  (innings ?? []).forEach(frame => {
+    const matchId = String(frame.match_c?.Id ?? frame.match_c ?? '');
+    if (!validMatchIds.has(matchId) || frame.status_c !== 'Completed') return;
+    const batting = rows.get(String(frame.batting_team_c?.Id ?? frame.batting_team_c ?? ''));
+    const bowling = rows.get(String(frame.bowling_team_c?.Id ?? frame.bowling_team_c ?? ''));
+    if (!batting || !bowling) return;
+    const match = (matches ?? []).find(item => String(item.Id) === matchId);
+    const quota = Math.max(0, Number(match?.overs_c || 0) * 6);
+    const legalBalls = Number(frame.legal_balls_c || 0);
+    const ballsFaced = Number(frame.wickets_c || 0) >= 10 && quota > 0 ? quota : legalBalls;
+    batting.runsFor += Number(frame.total_runs_c || 0);
+    batting.ballsFaced += ballsFaced;
+    bowling.runsAgainst += Number(frame.total_runs_c || 0);
+    bowling.ballsBowled += ballsFaced;
+  });
+  [...rows.values()].forEach(row => {
+    row.nrr = row.ballsFaced > 0 && row.ballsBowled > 0
+      ? row.runsFor / (row.ballsFaced / 6) - row.runsAgainst / (row.ballsBowled / 6)
+      : null;
+  });
+  return [...rows.values()].sort((a, b) => b.points - a.points || b.nrr - a.nrr || b.won - a.won || a.team.Name.localeCompare(b.team.Name));
 }
 
 const badge = {
@@ -80,7 +103,16 @@ export default function TournamentDetail() {
     if (!result.success) throw new Error(result.message);
     return result.data ?? [];
   }), [id]);
-  const standings = useMemo(() => calculateStandings(teams, matches), [teams, matches]);
+  const matchKey = (matches ?? []).map(match => match.Id).join('|');
+  const { data: innings, loading: inningsLoading, error: inningsError, run: reloadInnings } = useFetch(async () => {
+    const batches = await Promise.all((matches ?? []).map(async match => {
+      const result = await sdk.table('innings_c').select(INNINGS_FIELDS).where(eq('match_c', match.Id)).fetch();
+      if (!result.success) throw new Error(result.message);
+      return result.data ?? [];
+    }));
+    return batches.flat();
+  }, [matchKey]);
+  const standings = useMemo(() => calculateStandings(teams, matches, innings), [teams, matches, innings]);
 
   async function removeTournament() {
     setDeleting(true);
@@ -153,15 +185,15 @@ export default function TournamentDetail() {
             <h2 className="mt-1 font-heading text-xl font-bold uppercase">Tournament standings</h2>
             <p className="mt-1 text-sm text-muted-foreground">Calculated from finalized fixtures. Live and scheduled matches do not affect points.</p>
           </div>
-          <Button size="sm" variant="outline" disabled={teamsLoading || matchesLoading} onClick={() => { reloadTeams(); reloadMatches(); }}>Refresh standings</Button>
+          <Button size="sm" variant="outline" disabled={teamsLoading || matchesLoading || inningsLoading} onClick={() => { reloadTeams(); reloadMatches(); reloadInnings(); }}>Refresh standings</Button>
         </div>
-        {teamsError || matchesError ? <div className="p-5 text-sm text-destructive">Standings could not be loaded: {teamsError?.message || matchesError?.message}</div> : teamsLoading || matchesLoading ? <div className="p-8 text-center text-sm text-muted-foreground">Loading standings…</div> : !standings.length ? <div className="p-8 text-center text-sm text-muted-foreground">No teams are registered in this tournament yet.</div> : <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-sm">
-            <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3 text-left">Pos</th><th className="px-4 py-3 text-left">Team</th><th className="px-2 py-3 text-right">P</th><th className="px-2 py-3 text-right">W</th><th className="px-2 py-3 text-right">L</th><th className="px-2 py-3 text-right">T</th><th className="px-2 py-3 text-right">NR</th><th className="px-2 py-3 text-right">A</th><th className="px-4 py-3 text-right">Pts</th></tr></thead>
-            <tbody>{standings.map((row, index) => <tr key={row.team.Id} className="border-t border-border"><td className="px-4 py-3 font-semibold tabular-nums">{index + 1}</td><td className="px-4 py-3 font-semibold">{row.team.Name}</td><td className="px-2 py-3 text-right tabular-nums">{row.played}</td><td className="px-2 py-3 text-right tabular-nums">{row.won}</td><td className="px-2 py-3 text-right tabular-nums">{row.lost}</td><td className="px-2 py-3 text-right tabular-nums">{row.tied}</td><td className="px-2 py-3 text-right tabular-nums">{row.noResult}</td><td className="px-2 py-3 text-right tabular-nums">{row.abandoned}</td><td className="px-4 py-3 text-right font-bold tabular-nums">{row.points}</td></tr>)}</tbody>
+        {teamsError || matchesError || inningsError ? <div className="p-5 text-sm text-destructive">Standings could not be loaded: {teamsError?.message || matchesError?.message || inningsError?.message}</div> : teamsLoading || matchesLoading || inningsLoading ? <div className="p-8 text-center text-sm text-muted-foreground">Loading standings…</div> : !standings.length ? <div className="p-8 text-center text-sm text-muted-foreground">No teams are registered in this tournament yet.</div> : <div className="overflow-x-auto">
+          <table className="w-full min-w-[740px] text-sm">
+            <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3 text-left">Pos</th><th className="px-4 py-3 text-left">Team</th><th className="px-2 py-3 text-right">P</th><th className="px-2 py-3 text-right">W</th><th className="px-2 py-3 text-right">L</th><th className="px-2 py-3 text-right">T</th><th className="px-2 py-3 text-right">NR</th><th className="px-2 py-3 text-right">A</th><th className="px-2 py-3 text-right">NRR</th><th className="px-4 py-3 text-right">Pts</th></tr></thead>
+            <tbody>{standings.map((row, index) => <tr key={row.team.Id} className="border-t border-border"><td className="px-4 py-3 font-semibold tabular-nums">{index + 1}</td><td className="px-4 py-3 font-semibold">{row.team.Name}</td><td className="px-2 py-3 text-right tabular-nums">{row.played}</td><td className="px-2 py-3 text-right tabular-nums">{row.won}</td><td className="px-2 py-3 text-right tabular-nums">{row.lost}</td><td className="px-2 py-3 text-right tabular-nums">{row.tied}</td><td className="px-2 py-3 text-right tabular-nums">{row.noResult}</td><td className="px-2 py-3 text-right tabular-nums">{row.abandoned}</td><td className="px-2 py-3 text-right tabular-nums">{row.nrr === null ? '—' : row.nrr.toFixed(3)}</td><td className="px-4 py-3 text-right font-bold tabular-nums">{row.points}</td></tr>)}</tbody>
           </table>
         </div>}
-        <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground">Points: win 2 · tie 1 · no result 1 · abandoned 1 · loss 0. Tiebreak order: points, wins, then team name. Net run rate is not yet calculated.</div>
+        <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground">Points: win 2 · tie 1 · no result 1 · abandoned 1 · loss 0. Ranking: points, net run rate, wins, then team name. NRR excludes no-result and abandoned matches; all-out innings use the full overs quota.</div>
       </section>
       <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
