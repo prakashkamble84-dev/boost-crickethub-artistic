@@ -201,16 +201,6 @@ export default function LiveScoring() {
       } else {
         toast.success('Delivery recorded.');
       }
-      let newStriker = striker;
-      let newNonStriker = nonStriker;
-      const runningExtras = extrasType === 'Wide' || extrasType === 'No-ball' ? Math.max(0, extraRuns - 1) : extraRuns;
-      const completedRuns = batRuns + (['Bye', 'Leg-bye', 'Wide', 'No-ball'].includes(extrasType) ? runningExtras : 0);
-      if (completedRuns % 2 === 1) [newStriker, newNonStriker] = [newNonStriker, newStriker];
-      if (legal && next.legalBalls % 6 === 0) [newStriker, newNonStriker] = [newNonStriker, newStriker];
-      if (wicketType !== 'None') {
-        if (dismissedPlayer === newStriker) newStriker = nextBatter;
-        else if (dismissedPlayer === newNonStriker) newNonStriker = nextBatter;
-      }
       setStriker(newStriker);
       setNonStriker(newNonStriker);
       setNextBatter('');
