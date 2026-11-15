@@ -78,8 +78,8 @@ function calculatePlayerLeaders(teams, players, deliveries) {
     return rows.filter(row => metric(row) === target);
   };
   const awards = [
-    { title: 'Leading run-scorer', detail: row => `${row.runs} runs`, winners: tiedLeaders(battingRows, row => row.runs) },
-    { title: 'Leading wicket-taker', detail: row => `${row.wickets} wickets`, winners: tiedLeaders(bowlingRows, row => row.wickets) },
+    { title: 'Leading run-scorer', detail: row => `${row.runs} runs`, winners: tiedLeaders(battingRows.filter(row => row.runs > 0), row => row.runs) },
+    { title: 'Leading wicket-taker', detail: row => `${row.wickets} wickets`, winners: tiedLeaders(bowlingRows.filter(row => row.wickets > 0), row => row.wickets) },
     { title: 'Best strike rate', detail: row => `${row.strikeRate.toFixed(2)} SR · ${row.balls} balls`, winners: tiedLeaders(battingRows.filter(row => row.balls >= 10), row => row.strikeRate) },
     { title: 'Best bowling economy', detail: row => `${row.economy.toFixed(2)} economy · ${row.overs} overs`, winners: tiedLeaders(bowlingRows.filter(row => row.balls >= 12), row => row.economy, 'min') }
   ];
