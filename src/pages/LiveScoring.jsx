@@ -389,53 +389,79 @@ export default function LiveScoring() {
     }
   }
 
+  async function persistMatchResult(secondInnings) {
+    const first = (inningsRows ?? []).find(row => Number(row.innings_number_c) === 1);
+    if (!first || !secondInnings || secondInnings.status_c !== 'Completed') {
+      return toast.error('Both innings must be completed before saving a match result.');
+    }
+    const firstRuns = Number(first.total_runs_c || 0);
+    const secondRuns = Number(secondInnings.total_runs_c || 0);
+    const secondWickets = Number(secondInnings.wickets_c || 0);
+    let resultType = 'Win';
+    let winnerId = '';
+    let margin = 0;
+    let summary = '';
+
+    if (secondRuns === firstRuns) {
+      resultType = 'Tie';
+      summary = 'Match tied';
+    } else if (secondRuns > firstRuns) {
+      winnerId = idOf(secondInnings.batting_team_c);
+      margin = Math.max(0, 10 - secondWickets);
+      summary = `${secondInnings.batting_team_c?.Name || 'Chasing team'} won by ${margin} wicket${margin === 1 ? '' : 's'}`;
+    } else {
+      winnerId = idOf(secondInnings.bowling_team_c);
+      margin = firstRuns - secondRuns;
+      summary = `${secondInnings.bowling_team_c?.Name || 'Defending team'} won by ${margin} run${margin === 1 ? '' : 's'}`;
+    }
+
+    const matchResult = await sdk.table('matches_c').update({
+      Id: id,
+      status_c: 'Completed',
+      result_type_c: resultType,
+      winner_team_c: winnerId || null,
+      result_margin_c: margin,
+      result_summary_c: summary
+    });
+    if (!matchResult.data?.length) throw new Error(matchResult.messages?.[0] || 'Could not save the match result.');
+    toast.success(summary);
+    reloadMatch();
+  }
+
+  async function retryMatchResult() {
+    if (saving) return;
+    const second = (inningsRows ?? []).find(row => Number(row.innings_number_c) === 2);
+    setSaving(true);
+    try {
+      await persistMatchResult(second);
+    } catch (e) {
+      toast.error(e.message || 'Could not save the match result.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function completeInnings() {
     if (!activeInnings || saving) return;
+    if (Number(activeInnings.innings_number_c) === 2 && !chaseWon && !chaseLost) {
+      return toast.error('The chase is still in progress. Reach the target, lose all wickets, or use all overs before finalizing.');
+    }
     setSaving(true);
     try {
       const completed = await sdk.table('innings_c').update({ Id: activeInnings.Id, status_c: 'Completed' });
       if (!completed.data?.length) return toast.error(completed.messages?.[0] || 'Could not complete innings.');
-
       if (Number(activeInnings.innings_number_c) === 1) {
         await sdk.table('matches_c').update({ Id: id, status_c: 'Live' });
         toast.success('First innings completed. Set up the second innings.');
       } else {
-        const first = (inningsRows ?? []).find(row => Number(row.innings_number_c) === 1);
-        const firstRuns = Number(first?.total_runs_c || 0);
-        const secondRuns = score.runs;
-        let resultType = 'Win';
-        let winnerId = '';
-        let margin = 0;
-        let summary = '';
-
-        if (secondRuns === firstRuns) {
-          resultType = 'Tie';
-          summary = 'Match tied';
-        } else if (secondRuns > firstRuns) {
-          winnerId = idOf(activeInnings.batting_team_c);
-          margin = Math.max(0, 10 - score.wickets);
-          summary = `${activeInnings.batting_team_c?.Name || 'Chasing team'} won by ${margin} wicket${margin === 1 ? '' : 's'}`;
-        } else {
-          winnerId = idOf(activeInnings.bowling_team_c);
-          margin = firstRuns - secondRuns;
-          summary = `${activeInnings.bowling_team_c?.Name || 'Defending team'} won by ${margin} run${margin === 1 ? '' : 's'}`;
-        }
-
-        const matchResult = await sdk.table('matches_c').update({
-          Id: id,
-          status_c: 'Completed',
-          result_type_c: resultType,
-          winner_team_c: winnerId || null,
-          result_margin_c: margin,
-          result_summary_c: summary
-        });
-        if (!matchResult.data?.length) return toast.error(matchResult.messages?.[0] || 'Innings completed, but match result could not be saved. Refresh and retry.');
-        toast.success(summary);
+        const completedSecond = {...activeInnings, status_c: 'Completed', total_runs_c: score.runs, wickets_c: score.wickets, legal_balls_c: score.legalBalls};
+        await persistMatchResult(completedSecond);
       }
       reloadInnings();
       reloadMatch();
     } catch (e) {
-      toast.error(e.message || 'Could not complete innings.');
+      toast.error(e.message || 'Could not complete innings. If the innings is already completed, use Retry result save.');
+      reloadInnings();
     } finally {
       setSaving(false);
     }
@@ -453,10 +479,10 @@ export default function LiveScoring() {
           <h1 className="mt-2 font-heading text-4xl font-bold uppercase">{match.Name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{match.team_a_c?.Name} vs {match.team_b_c?.Name} · {match.overs_c} overs per innings</p>
         </div>
-        {!activeInnings && match.status_c !== 'Completed' ? <Button onClick={() => { setBattingTeam(idOf(match.team_a_c)); setBowlingTeam(idOf(match.team_b_c)); setSetupOpen(true); }}>Start innings</Button> : activeInnings ? <Button variant="outline" disabled={saving} onClick={completeInnings}>{saving ? 'Saving…' : Number(activeInnings.innings_number_c) === 2 ? 'Finalize match' : 'Complete innings'}</Button> : <span className="rounded-full bg-success-muted px-3 py-2 text-sm font-semibold text-success">MATCH COMPLETED</span>}
+        {!activeInnings && match.status_c !== 'Completed' && (inningsRows ?? []).some(row => Number(row.innings_number_c) === 2 && row.status_c === 'Completed') ? <Button variant="outline" disabled={saving} onClick={retryMatchResult}>{saving ? 'Saving…' : 'Retry result save'}</Button> : !activeInnings && match.status_c !== 'Completed' ? <Button onClick={() => { setBattingTeam(idOf(match.team_a_c)); setBowlingTeam(idOf(match.team_b_c)); setSetupOpen(true); }}>Start innings</Button> : activeInnings ? <Button variant="outline" disabled={saving || (Number(activeInnings.innings_number_c) === 2 && !chaseWon && !chaseLost)} onClick={completeInnings}>{saving ? 'Saving…' : Number(activeInnings.innings_number_c) === 2 ? 'Finalize match' : 'Complete innings'}</Button> : <span className="rounded-full bg-success-muted px-3 py-2 text-sm font-semibold text-success">MATCH COMPLETED</span>}
       </header>
 
-      {match.status_c === 'Completed' && match.result_summary_c ? <section className="rounded-xl border border-primary/30 bg-primary/5 p-5"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Match result</p><h2 className="mt-1 font-heading text-2xl font-bold">{match.result_summary_c}</h2><p className="mt-1 text-sm text-muted-foreground">{match.result_type_c === 'Tie' ? 'Scores level after both innings.' : `${match.winner_team_c?.Name || 'Winning team'} · ${match.result_margin_c} ${Number(match.result_margin_c) === 1 ? 'unit' : 'units'}`}</p></section> : null}
+      {match.status_c === 'Completed' && match.result_summary_c ? <section className="rounded-xl border border-primary/30 bg-primary/5 p-5"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Match result</p><h2 className="mt-1 font-heading text-2xl font-bold">{match.result_summary_c}</h2><p className="mt-1 text-sm text-muted-foreground">{match.result_type_c === 'Tie' ? 'Scores level after both innings.' : match.winner_team_c?.Name || 'Winning team'}</p></section> : null}
 
       {setupOpen ? <form onSubmit={startInnings} className="grid gap-4 rounded-xl border border-border bg-card p-5 sm:grid-cols-2">
         <div className="sm:col-span-2"><h2 className="font-heading text-2xl font-bold uppercase">Innings setup</h2><p className="text-sm text-muted-foreground">Set the batting order and opening bowler before the first ball.</p></div>
