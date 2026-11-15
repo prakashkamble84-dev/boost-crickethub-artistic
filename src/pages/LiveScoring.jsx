@@ -249,8 +249,14 @@ export default function LiveScoring() {
     if (!activeInnings || !striker || !nonStriker || !bowler || striker === nonStriker || !Number.isInteger(batRuns) || batRuns < 0 || batRuns > 6 || !Number.isInteger(extraRuns) || extraRuns < 0 || extraRuns > 10) {
       return toast.error('Check the batter, bowler and run values.');
     }
-    if (extrasType === 'Wide' || extrasType === 'No-ball') {
-      if (batRuns !== 0 && extrasType === 'Wide') return toast.error('Runs from a wide are extras, not batter runs.');
+    if (extrasType === 'Wide' && (batRuns !== 0 || extraRuns < 1)) {
+      return toast.error('A wide must include at least one extra run and no batter runs.');
+    }
+    if (extrasType === 'No-ball' && extraRuns < 1) {
+      return toast.error('A no-ball must include at least one extra run.');
+    }
+    if (['Bye', 'Leg-bye', 'Penalty'].includes(extrasType) && batRuns !== 0) {
+      return toast.error('Bye, leg-bye and penalty runs must be entered as extras, not batter runs.');
     }
     if (wicketType !== 'None' && (!dismissedPlayer || !nextBatter)) return toast.error('Choose the dismissed batter and the incoming batter.');
     if (wicketType !== 'None' && ![striker, nonStriker].includes(dismissedPlayer)) return toast.error('The dismissed player must be one of the two active batters.');
