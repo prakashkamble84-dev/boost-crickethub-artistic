@@ -179,7 +179,7 @@ export default function LiveScoring() {
       return result.data ?? [];
     }));
     return batches.flat();
-  }, [inningsKey]);
+  }, [inningsKey, deliveries?.length]);
   const score = useMemo(() => scoreDeliveries(deliveries ?? []), [deliveries]);
   const battingPlayers = (players ?? []).filter(p => idOf(p.squad_c) === idOf(activeInnings?.batting_team_c));
   const bowlingPlayers = (players ?? []).filter(p => idOf(p.squad_c) === idOf(activeInnings?.bowling_team_c));
@@ -191,6 +191,7 @@ export default function LiveScoring() {
     const bowlers = (players ?? []).filter(player => idOf(player.squad_c) === idOf(row.bowling_team_c));
     return { innings: row, score: scoreDeliveries(rows), figures: buildScorecards(rows, batters, bowlers) };
   }), [completedInnings, allMatchDeliveries, players]);
+  const maxOvers = Number(match?.overs_c || 20);
   const firstInnings = (inningsRows ?? []).find(row => Number(row.innings_number_c) === 1);
   const target = Number(activeInnings?.target_runs_c || (Number(activeInnings?.innings_number_c) === 2 ? Number(firstInnings?.total_runs_c || 0) + 1 : 0));
   const runsNeeded = target > 0 ? Math.max(0, target - score.runs) : null;
@@ -198,7 +199,6 @@ export default function LiveScoring() {
   const chaseWon = target > 0 && score.runs >= target;
   const chaseLost = target > 0 && (score.wickets >= 10 || ballsRemaining === 0) && !chaseWon;
   const availableBatters = battingPlayers.filter(p => ![striker, nonStriker].includes(String(p.Id)));
-  const maxOvers = Number(match?.overs_c || 20);
   const overComplete = score.legalBalls > 0 && score.legalBalls % 6 === 0;
 
   useEffect(() => {
