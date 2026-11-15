@@ -280,6 +280,37 @@ export default function TournamentDetail() {
       <section className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-primary">Player performance</p>
+            <h2 className="mt-1 font-heading text-xl font-bold uppercase">Tournament leaderboards</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Calculated from recorded deliveries across this tournament, including live innings.</p>
+          </div>
+          <Button size="sm" variant="outline" disabled={deliveriesLoading || playersLoading} onClick={() => { reloadDeliveries(); reloadPlayers(); }}>Refresh leaders</Button>
+        </div>
+        {deliveriesError || playersError ? <div className="p-5 text-sm text-destructive">Player statistics could not be loaded: {deliveriesError?.message || playersError?.message}</div> : deliveriesLoading || playersLoading || inningsLoading || teamsLoading ? <div className="p-8 text-center text-sm text-muted-foreground">Calculating player statistics…</div> : !playerLeaders.batting.length && !playerLeaders.bowling.length ? <div className="p-8 text-center text-sm text-muted-foreground">Player leaderboards will appear after deliveries are recorded.</div> : <div className="grid gap-6 p-5 lg:grid-cols-2">
+          <div className="min-w-0">
+            <h3 className="font-heading text-lg font-bold uppercase">Top run-scorers</h3>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[420px] text-sm">
+                <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-2 py-3 text-left">#</th><th className="px-2 py-3 text-left">Player</th><th className="px-2 py-3 text-right">R</th><th className="px-2 py-3 text-right">B</th><th className="px-2 py-3 text-right">4s</th><th className="px-2 py-3 text-right">6s</th><th className="px-2 py-3 text-right">SR</th></tr></thead>
+                <tbody>{playerLeaders.batting.map((row, index) => <tr key={row.playerId} className="border-t border-border"><td className="px-2 py-3 tabular-nums">{index + 1}</td><td className="px-2 py-3"><p className="font-semibold">{row.player?.Name || 'Unknown player'}</p><p className="text-xs text-muted-foreground">{row.teamName}</p></td><td className="px-2 py-3 text-right font-bold tabular-nums">{row.runs}</td><td className="px-2 py-3 text-right tabular-nums">{row.balls}</td><td className="px-2 py-3 text-right tabular-nums">{row.fours}</td><td className="px-2 py-3 text-right tabular-nums">{row.sixes}</td><td className="px-2 py-3 text-right tabular-nums">{row.strikeRate.toFixed(2)}</td></tr>)}</tbody>
+              </table>
+            </div>
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-heading text-lg font-bold uppercase">Top wicket-takers</h3>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[360px] text-sm">
+                <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-2 py-3 text-left">#</th><th className="px-2 py-3 text-left">Player</th><th className="px-2 py-3 text-right">O</th><th className="px-2 py-3 text-right">R</th><th className="px-2 py-3 text-right">W</th><th className="px-2 py-3 text-right">Econ</th></tr></thead>
+                <tbody>{playerLeaders.bowling.map((row, index) => <tr key={row.playerId} className="border-t border-border"><td className="px-2 py-3 tabular-nums">{index + 1}</td><td className="px-2 py-3"><p className="font-semibold">{row.player?.Name || 'Unknown player'}</p><p className="text-xs text-muted-foreground">{row.teamName}</p></td><td className="px-2 py-3 text-right tabular-nums">{row.overs}</td><td className="px-2 py-3 text-right tabular-nums">{row.runs}</td><td className="px-2 py-3 text-right font-bold tabular-nums">{row.wickets}</td><td className="px-2 py-3 text-right tabular-nums">{row.economy.toFixed(2)}</td></tr>)}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>}
+        <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground">Batting runs exclude extras; batter balls exclude wides and penalty deliveries. Bowling wickets include bowled, caught, LBW, stumped and hit wicket. Rankings show the top 10 in each category.</div>
+      </section>
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
+          <div>
             <p className="text-xs font-bold uppercase tracking-wider text-primary">Match centre</p>
             <h2 className="mt-1 font-heading text-xl font-bold uppercase">Fixtures &amp; results</h2>
             <p className="mt-1 text-sm text-muted-foreground">Open any fixture to manage match details, scoring and its public scoreboard.</p>
