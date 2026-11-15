@@ -16,6 +16,7 @@ const PLAYER_FIELDS = ['Id', 'Name', 'squad_c', 'jersey_number_c', 'role_c'];
 const EXTRAS = ['None', 'Wide', 'No-ball', 'Bye', 'Leg-bye', 'Penalty'];
 const WICKETS = ['None', 'Bowled', 'Caught', 'LBW', 'Run out', 'Stumped', 'Hit wicket', 'Obstructing field', 'Retired out'];
 
+const { eq } = window.ApperSDK.CoreSDK;
 const idOf = (v) => String(v?.Id ?? v ?? '');
 const labelOf = (p) => p ? (p.jersey_number_c ? `#${p.jersey_number_c} ` : '') + p.Name : 'Choose player';
 
@@ -65,13 +66,13 @@ export default function LiveScoring() {
     if (!r.success) throw new Error(r.message);
     return r.data;
   }), [id]);
-  const { data: inningsRows, loading: inningsLoading, run: reloadInnings } = useFetch(() => sdk.table('innings_c').select(INNINGS_FIELDS).where(window.ApperSDK.CoreSDK.eq('match_c', id)).orderBy('innings_number_c').fetch().then(r => {
+  const { data: inningsRows, loading: inningsLoading, run: reloadInnings } = useFetch(() => sdk.table('innings_c').select(INNINGS_FIELDS).where(eq('match_c', id)).orderBy('innings_number_c').fetch().then(r => {
     if (!r.success) throw new Error(r.message);
     return r.data;
   }), [id]);
   const activeInnings = (inningsRows ?? []).find(x => x.status_c === 'In Progress') ?? null;
   const { data: deliveries, loading: deliveriesLoading, run: reloadDeliveries } = useFetch(() => activeInnings
-    ? sdk.table('deliveries_c').select(DELIVERY_FIELDS).where(window.ApperSDK.CoreSDK.eq('innings_c', activeInnings.Id)).orderBy('sequence_number_c').fetch().then(r => {
+    ? sdk.table('deliveries_c').select(DELIVERY_FIELDS).where(eq('innings_c', activeInnings.Id)).orderBy('sequence_number_c').fetch().then(r => {
       if (!r.success) throw new Error(r.message);
       return r.data;
     })
@@ -84,7 +85,6 @@ export default function LiveScoring() {
   const battingPlayers = (players ?? []).filter(p => idOf(p.squad_c) === idOf(activeInnings?.batting_team_c));
   const bowlingPlayers = (players ?? []).filter(p => idOf(p.squad_c) === idOf(activeInnings?.bowling_team_c));
   const availableBatters = battingPlayers.filter(p => ![striker, nonStriker].includes(String(p.Id)));
-  const lastBall = (deliveries ?? []).at(-1);
   const maxOvers = Number(match?.overs_c || 20);
   const overComplete = score.legalBalls > 0 && score.legalBalls % 6 === 0;
 
@@ -128,7 +128,10 @@ export default function LiveScoring() {
     if (extrasType === 'Wide' || extrasType === 'No-ball') {
       if (batRuns !== 0 && extrasType === 'Wide') return toast.error('Runs from a wide are extras, not batter runs.');
     }
-    if (wicketType !== 'None' && !dismissedPlayer) return toast.error('Choose the dismissed batter.');
+    if (wicketType !== 'None' && (!dismissedPlayer || !nextBatter)) return toast.error('Choose the dismissed batter and the incoming batter.');
+    if (wicketType !== 'None' && ![striker, nonStriker].includes(dismissedPlayer)) return toast.error('The dismissed player must be one of the two active batters.');
+    if (wicketType !== 'None' && [striker, nonStriker].includes(nextBatter)) return toast.error('The incoming batter must be a different player.');
+    if (['Bowled', 'Caught', 'LBW', 'Stumped', 'Hit wicket'].includes(wicketType) && dismissedPlayer !== striker) return toast.error('This dismissal must be recorded against the striker.');
     if (wicketType === 'Caught' && !fielder) return toast.error('Choose the fielder for a catch.');
     const legal = extrasType !== 'Wide' && extrasType !== 'No-ball';
     const previous = deliveries ?? [];
@@ -177,14 +180,17 @@ export default function LiveScoring() {
       }
       let newStriker = striker;
       let newNonStriker = nonStriker;
-      if ((batRuns + extraRuns) % 2 === 1) [newStriker, newNonStriker] = [newNonStriker, newStriker];
+      const runningExtras = extrasType === 'Wide' || extrasType === 'No-ball' ? Math.max(0, extraRuns - 1) : extraRuns;
+      const completedRuns = batRuns + (['Bye', 'Leg-bye', 'Wide', 'No-ball'].includes(extrasType) ? runningExtras : 0);
+      if (completedRuns % 2 === 1) [newStriker, newNonStriker] = [newNonStriker, newStriker];
       if (legal && next.legalBalls % 6 === 0) [newStriker, newNonStriker] = [newNonStriker, newStriker];
       if (wicketType !== 'None') {
-        if (dismissedPlayer === newStriker) newStriker = '';
-        if (dismissedPlayer === newNonStriker) newNonStriker = '';
+        if (dismissedPlayer === newStriker) newStriker = nextBatter;
+        else if (dismissedPlayer === newNonStriker) newNonStriker = nextBatter;
       }
       setStriker(newStriker);
       setNonStriker(newNonStriker);
+      setNextBatter('');
       setBatterRuns('0');
       setExtrasType('None');
       setExtrasRuns('0');
