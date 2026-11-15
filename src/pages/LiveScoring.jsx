@@ -216,6 +216,13 @@ export default function LiveScoring() {
     setStarting(true);
     try {
       const number = (inningsRows ?? []).length + 1;
+      const previousInnings = (inningsRows ?? []).find(row => Number(row.innings_number_c) === number - 1);
+      if (number > 1 && previousInnings?.status_c !== 'Completed') {
+        return toast.error('Complete the previous innings before starting the next one.');
+      }
+      if (number > 2) {
+        return toast.error('This match format currently supports two innings only.');
+      }
       const result = await sdk.table('innings_c').create({
         Name: `Innings ${number} · ${match.Name}`,
         match_c: id,
