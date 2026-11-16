@@ -32,8 +32,18 @@ function scoreDeliveries(rows) {
     score.batterRuns += batter;
     score.extras += extras + noBallPenalty;
     if (ball.is_legal_ball_c) score.legalBalls += 1;
-    if (type === 'Wide') score.wides += extras;
-    if (type === 'No-ball') score.noBalls += extras + noBallPenalty;
+    if (type === 'Wide') {
+      score.wides += Math.min(1, extras);
+      score.byes += Math.max(0, extras - 1);
+    }
+    if (type === 'No-ball') {
+      if (separateNoBallPenalty) {
+        score.noBalls += noBallPenalty;
+        score.byes += extras;
+      } else {
+        score.noBalls += extras;
+      }
+    }
     if (type === 'Bye') score.byes += extras;
     if (type === 'Leg-bye') score.legByes += extras;
     if (type === 'Penalty') score.penalties += extras;
@@ -44,6 +54,36 @@ function scoreDeliveries(rows) {
 
 function oversText(balls) {
   return `${Math.floor(balls / 6)}.${balls % 6}`;
+}
+
+function ballRuns(d) {
+  const type = d.extras_type_c || 'None';
+  const penalty = type === 'No-ball' && d.no_ball_penalty_runs_c != null ? Number(d.no_ball_penalty_runs_c || 0) : 0;
+  return Number(d.batter_runs_c || 0) + Number(d.extras_runs_c || 0) + penalty;
+}
+
+function chipLabel(d) {
+  if (d.wicket_type_c && d.wicket_type_c !== 'None') return 'W';
+  const runs = ballRuns(d);
+  if (d.extras_type_c === 'Wide') return runs > 1 ? `Wd+${runs - 1}` : 'Wd';
+  if (d.extras_type_c === 'No-ball') return runs > 1 ? `Nb+${runs - 1}` : 'Nb';
+  return runs;
+}
+
+function extrasNote(d) {
+  const bat = Number(d.batter_runs_c || 0);
+  const extras = Number(d.extras_runs_c || 0);
+  if (d.extras_type_c === 'Wide') {
+    const byes = Math.max(0, extras - 1);
+    return `Wide${byes ? ` · ${byes} bye/leg-bye run${byes === 1 ? '' : 's'}` : ''}`;
+  }
+  if (d.extras_type_c === 'No-ball') {
+    const parts = ['No-ball'];
+    if (bat) parts.push(`${bat} off the bat`);
+    if (extras) parts.push(`${extras} bye/leg-bye run${extras === 1 ? '' : 's'}`);
+    return parts.join(' · ');
+  }
+  return `${d.extras_type_c}: ${extras} extra${extras === 1 ? '' : 's'}`;
 }
 
 function buildScorecards(rows, battingPlayers, bowlingPlayers) {
@@ -105,7 +145,7 @@ function buildScorecards(rows, battingPlayers, bowlingPlayers) {
       }
       const bowler = bowlers.get(bowlerId);
       if (ball.is_legal_ball_c) bowler.balls += 1;
-      if (type === 'Wide') bowler.runs += extras + batterRuns;
+      if (type === 'Wide') bowler.runs += Math.min(1, extras) + batterRuns;
       else if (type === 'No-ball') bowler.runs += (ball.no_ball_penalty_runs_c != null ? Number(ball.no_ball_penalty_runs_c || 0) : extras) + batterRuns;
       else if (type !== 'Bye' && type !== 'Leg-bye' && type !== 'Penalty') bowler.runs += batterRuns;
       if (creditedWickets.has(wicketType)) bowler.wickets += 1;
@@ -114,7 +154,7 @@ function buildScorecards(rows, battingPlayers, bowlingPlayers) {
       if (!overFigures.has(overKey)) overFigures.set(overKey, { bowlerId, over: Number(ball.over_number_c), legalBalls: 0, conceded: 0 });
       const over = overFigures.get(overKey);
       if (ball.is_legal_ball_c) over.legalBalls += 1;
-      if (type === 'Wide') over.conceded += extras + batterRuns;
+      if (type === 'Wide') over.conceded += Math.min(1, extras) + batterRuns;
       else if (type === 'No-ball') over.conceded += (ball.no_ball_penalty_runs_c != null ? Number(ball.no_ball_penalty_runs_c || 0) : extras) + batterRuns;
       else if (type !== 'Bye' && type !== 'Leg-bye' && type !== 'Penalty') over.conceded += batterRuns;
     }
@@ -305,9 +345,6 @@ export default function LiveScoring() {
     }
     if (extrasType === 'Wide' && (batRuns !== 0 || extraRuns < 1)) {
       return toast.error('A wide must include at least one extra run and no batter runs.');
-    }
-    if (extrasType === 'No-ball' && batRuns > 0 && extraRuns > 0) {
-      return toast.error('Enter batter runs or additional byes/leg-byes for a no-ball, not both.');
     }
     if (['Bye', 'Leg-bye'].includes(extrasType) && batRuns !== 0) {
       return toast.error('Bye and leg-bye runs must be entered as extras, not batter runs.');
@@ -727,18 +764,18 @@ export default function LiveScoring() {
         <form onSubmit={recordDelivery} className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <section className="space-y-4 rounded-xl border border-border bg-card p-5">
             <div className="flex items-center justify-between"><h2 className="font-heading text-2xl font-bold uppercase">Record delivery</h2><span className="text-sm tabular-nums text-muted-foreground">Over {Math.floor(score.legalBalls / 6) + 1} · Ball {score.legalBalls % 6 + 1}</span></div>
-            <div className="grid grid-cols-4 gap-2">{[0, 1, 2, 3, 4, 5, 6].map(n => <Button key={n} type="button" variant={batterRuns === String(n) ? 'default' : 'outline'} className="h-12 text-lg font-bold" onClick={() => { setBatterRuns(String(n)); if (n > 0) { setExtrasType('None'); setExtrasRuns('0'); } }}>{n}</Button>)}<Button type="button" variant="outline" className="h-12" onClick={() => { setBatterRuns('0'); setExtrasType('Wide'); setExtrasRuns('1'); }}>Wd</Button><Button type="button" variant="outline" className="h-12" onClick={() => { setBatterRuns('0'); setExtrasType('No-ball'); setExtrasRuns('0'); }}>Nb</Button></div>
+            <div className="grid grid-cols-4 gap-2">{[0, 1, 2, 3, 4, 5, 6].map(n => <Button key={n} type="button" variant={batterRuns === String(n) ? 'default' : 'outline'} className="h-12 text-lg font-bold" onClick={() => { setBatterRuns(String(n)); if (n > 0 && extrasType !== 'No-ball') { setExtrasType('None'); setExtrasRuns('0'); } }}>{n}</Button>)}<Button type="button" variant="outline" className="h-12" onClick={() => { setBatterRuns('0'); setExtrasType('Wide'); setExtrasRuns('1'); }}>Wd</Button><Button type="button" variant="outline" className="h-12" onClick={() => { setBatterRuns('0'); setExtrasType('No-ball'); setExtrasRuns('0'); }}>Nb</Button></div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2"><Label>Extras type</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={extrasType} onChange={e => { const nextType = e.target.value; const allowedWickets = nextType === 'No-ball' ? ['None', 'Run out', 'Obstructing field'] : nextType === 'Wide' ? ['None', 'Run out', 'Stumped', 'Hit wicket', 'Obstructing field'] : WICKETS; setExtrasType(nextType); if (!allowedWickets.includes(wicketType)) { setWicketType('None'); setDismissedPlayer(''); setFielder(''); setNextBatter(''); setBattersCrossed(false); } }}>{EXTRAS.map(x => <option key={x}>{x}</option>)}</select></div>
-              <div className="space-y-2"><Label>{extrasType === 'No-ball' ? 'Additional byes / leg-byes' : 'Extras runs'}</Label><Input type="number" min="0" max="10" value={extrasRuns} onChange={e => setExtrasRuns(e.target.value)} /></div>
+              <div className="space-y-2"><Label>{extrasType === 'No-ball' ? 'Additional byes / leg-byes' : extrasType === 'Wide' ? 'Wide runs (1 + byes/leg-byes)' : 'Extras runs'}</Label><Input type="number" min="0" max="10" value={extrasRuns} onChange={e => setExtrasRuns(e.target.value)} /></div>
               <div className="space-y-2"><Label>Wicket</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={wicketType} onChange={e => setWicketType(e.target.value)}>{(extrasType === 'No-ball' ? ['None', 'Run out', 'Obstructing field'] : extrasType === 'Wide' ? ['None', 'Run out', 'Stumped', 'Hit wicket', 'Obstructing field'] : WICKETS).map(x => <option key={x}>{x}</option>)}</select></div>
               {wicketType !== 'None' ? <>{wicketType === 'Run out' ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={battersCrossed} onChange={e => setBattersCrossed(e.target.checked)} />Batters had crossed when the wicket was broken</label> : null}<div className="space-y-2"><Label>Dismissed batter</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={dismissedPlayer} onChange={e => setDismissedPlayer(e.target.value)}><option value="">Choose batter</option>{battingPlayers.filter(p => [striker, nonStriker].includes(String(p.Id))).map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div><div className="space-y-2"><Label>Fielder (if applicable)</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={fielder} onChange={e => setFielder(e.target.value)}><option value="">Not applicable</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div><div className="space-y-2"><Label>Next batter</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={nextBatter} onChange={e => setNextBatter(e.target.value)}><option value="">Choose after wicket</option>{availableBatters.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div></> : null}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-xs text-muted-foreground">Wide and no-ball do not count as legal balls. Extras are added to the team total.</p><Button disabled={recoveryRequired || saving || deliveriesLoading || !striker || !nonStriker || !bowler || score.wickets >= 10 || score.legalBalls >= maxOvers * 6 || chaseWon}>{saving ? 'Saving…' : 'Record ball'}</Button></div>
           </section>
           <aside className="space-y-4">
-            <section className="rounded-xl border border-border bg-card p-5"><h3 className="font-heading text-xl font-bold uppercase">This over</h3><div className="mt-3 flex flex-wrap gap-2">{(deliveries ?? []).filter(d => d.over_number_c === Math.floor(score.legalBalls / 6) + 1).map(d => <span key={d.Id} className="grid h-9 min-w-9 place-items-center rounded-md border border-border px-2 text-sm font-semibold">{d.wicket_type_c && d.wicket_type_c !== 'None' ? 'W' : d.extras_type_c === 'Wide' ? 'Wd' : d.extras_type_c === 'No-ball' ? 'Nb' : Number(d.batter_runs_c || 0) + Number(d.extras_runs_c || 0)}</span>)}{!(deliveries ?? []).some(d => d.over_number_c === Math.floor(score.legalBalls / 6) + 1) ? <p className="text-sm text-muted-foreground">No balls yet in this over.</p> : null}</div><p className="mt-3 text-sm text-muted-foreground">{overComplete ? 'Over complete. Change bowler before the next delivery.' : 'Ball-by-ball entries are saved as the scoring ledger.'}</p></section>
-            <section className="rounded-xl border border-border bg-card p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-heading text-xl font-bold uppercase">Delivery audit trail</h3><p className="mt-1 text-xs text-muted-foreground">{(deliveries ?? []).length} recorded entries · newest first</p></div><Button type="button" size="sm" variant="outline" disabled={recoveryRequired || saving || deliveriesLoading || !(deliveries ?? []).length} onClick={undoLastDelivery}>Undo last ball</Button></div><div className="mt-3 max-h-[480px] space-y-2 overflow-y-auto pr-1">{(deliveries ?? []).slice().reverse().map(d => <div key={d.Id} className="grid grid-cols-[52px_1fr_auto] items-start gap-2 border-b border-border pb-2 text-sm"><span className="font-semibold tabular-nums">{d.over_number_c}.{d.ball_number_c}</span><div className="min-w-0"><p className="truncate font-medium">{d.striker_c?.Name || 'Batter'} <span className="font-normal text-muted-foreground">vs {d.bowler_c?.Name || 'Bowler'}</span></p><p className="text-xs text-muted-foreground">{d.wicket_type_c && d.wicket_type_c !== 'None' ? `${d.wicket_type_c} · ${d.dismissed_player_c?.Name || 'Dismissed batter'}${d.fielder_c?.Name ? ` · ${d.fielder_c.Name}` : ''}` : d.extras_type_c && d.extras_type_c !== 'None' ? `${d.extras_type_c}: ${Number(d.extras_runs_c || 0)} extra${Number(d.extras_runs_c || 0) === 1 ? '' : 's'}` : 'Legal delivery'}</p></div><strong className="tabular-nums">{d.wicket_type_c && d.wicket_type_c !== 'None' ? 'W' : `+${Number(d.batter_runs_c || 0) + Number(d.extras_runs_c || 0)}`}</strong></div>)}{!(deliveries ?? []).length ? <p className="text-sm text-muted-foreground">The first delivery has not been recorded.</p> : null}</div><p className="mt-3 text-xs text-muted-foreground">Only the most recent delivery can currently be undone. Historical edits are intentionally disabled to avoid corrupting later batter and bowler state.</p></section>
+            <section className="rounded-xl border border-border bg-card p-5"><h3 className="font-heading text-xl font-bold uppercase">This over</h3><div className="mt-3 flex flex-wrap gap-2">{(deliveries ?? []).filter(d => d.over_number_c === Math.floor(score.legalBalls / 6) + 1).map(d => <span key={d.Id} className="grid h-9 min-w-9 place-items-center rounded-md border border-border px-2 text-sm font-semibold">{chipLabel(d)}</span>)}{!(deliveries ?? []).some(d => d.over_number_c === Math.floor(score.legalBalls / 6) + 1) ? <p className="text-sm text-muted-foreground">No balls yet in this over.</p> : null}</div><p className="mt-3 text-sm text-muted-foreground">{overComplete ? 'Over complete. Change bowler before the next delivery.' : 'Ball-by-ball entries are saved as the scoring ledger.'}</p></section>
+            <section className="rounded-xl border border-border bg-card p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-heading text-xl font-bold uppercase">Delivery audit trail</h3><p className="mt-1 text-xs text-muted-foreground">{(deliveries ?? []).length} recorded entries · newest first</p></div><Button type="button" size="sm" variant="outline" disabled={recoveryRequired || saving || deliveriesLoading || !(deliveries ?? []).length} onClick={undoLastDelivery}>Undo last ball</Button></div><div className="mt-3 max-h-[480px] space-y-2 overflow-y-auto pr-1">{(deliveries ?? []).slice().reverse().map(d => <div key={d.Id} className="grid grid-cols-[52px_1fr_auto] items-start gap-2 border-b border-border pb-2 text-sm"><span className="font-semibold tabular-nums">{d.over_number_c}.{d.ball_number_c}</span><div className="min-w-0"><p className="truncate font-medium">{d.striker_c?.Name || 'Batter'} <span className="font-normal text-muted-foreground">vs {d.bowler_c?.Name || 'Bowler'}</span></p><p className="text-xs text-muted-foreground">{d.wicket_type_c && d.wicket_type_c !== 'None' ? `${d.wicket_type_c} · ${d.dismissed_player_c?.Name || 'Dismissed batter'}${d.fielder_c?.Name ? ` · ${d.fielder_c.Name}` : ''}` : d.extras_type_c && d.extras_type_c !== 'None' ? extrasNote(d) : 'Legal delivery'}</p></div><strong className="tabular-nums">{d.wicket_type_c && d.wicket_type_c !== 'None' ? 'W' : `+${ballRuns(d)}`}</strong></div>)}{!(deliveries ?? []).length ? <p className="text-sm text-muted-foreground">The first delivery has not been recorded.</p> : null}</div><p className="mt-3 text-xs text-muted-foreground">Only the most recent delivery can currently be undone. Historical edits are intentionally disabled to avoid corrupting later batter and bowler state.</p></section>
           </aside>
         </form>
       </> : <section className="rounded-xl border border-dashed border-border bg-card p-8 text-center"><ApperIcon name="PlayCircle" size={32} className="mx-auto text-muted-foreground" /><h2 className="mt-3 font-heading text-2xl font-bold uppercase">{inningsLoading ? 'Loading innings…' : 'Ready for the toss'}</h2><p className="mt-1 text-sm text-muted-foreground">{(inningsRows ?? []).length ? 'Previous innings are saved. Start the next innings when the teams are ready.' : 'Set the batting order and opening bowler to begin ball-by-ball scoring.'}</p>{!inningsLoading && !['Completed', 'Abandoned'].includes(match.status_c) ? <Button className="mt-4" onClick={() => { setBattingTeam(idOf(match.team_a_c)); setBowlingTeam(idOf(match.team_b_c)); setSetupOpen(true); }}>Set up innings</Button> : null}</section>}
