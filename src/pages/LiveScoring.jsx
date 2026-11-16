@@ -184,6 +184,53 @@ function buildScorecards(rows, battingPlayers, bowlingPlayers) {
   return { batting, bowling };
 }
 
+function AddPlayerInline({ squadId, role, onAdded }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const trimmed = name.trim();
+    if (!trimmed || !squadId) return;
+    setSaving(true);
+    try {
+      const res = await sdk.table('players_c').create({ Name: trimmed, squad_c: squadId, role_c: role });
+      if (!res.data?.length) {
+        const message = res.messages?.join('; ') || 'Player was not saved.';
+        toast.error(message);
+        console.error(`players_c create failed: ${message}`);
+        return;
+      }
+      setName('');
+      setOpen(false);
+      await onAdded(String(res.data[0].Id));
+      toast.success(`${trimmed} added.`);
+    } catch (error) {
+      toast.error(error.message || 'Could not add player.');
+      console.error(`players_c create failed: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <Button type="button" variant="outline" size="sm" className="mt-2" disabled={!squadId} onClick={() => setOpen(true)}>
+        <ApperIcon name="Plus" size={14} />
+        Add new player
+      </Button>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <Input value={name} onChange={e => setName(e.target.value)} placeholder="Player name" className="h-9 min-w-0 flex-1" />
+      <Button type="button" size="sm" disabled={saving || !name.trim()} onClick={save}>{saving ? 'Adding…' : 'Save'}</Button>
+      <Button type="button" size="sm" variant="ghost" onClick={() => { setOpen(false); setName(''); }}>Cancel</Button>
+    </div>
+  );
+}
+
 export const route = { path: '/matches/:id/score', layout: 'owner', access: 'authenticated' };
 
 export default function LiveScoring() {
@@ -221,7 +268,7 @@ export default function LiveScoring() {
       return r.data;
     })
     : Promise.resolve([]), [activeInnings?.Id]);
-  const { data: players } = useFetch(() => sdk.table('players_c').select(PLAYER_FIELDS).orderBy('Name').fetch().then(r => {
+  const { data: players, run: reloadPlayers } = useFetch(() => sdk.table('players_c').select(PLAYER_FIELDS).orderBy('Name').fetch().then(r => {
     if (!r.success) throw new Error(r.message);
     return r.data;
   }), []);
@@ -464,6 +511,21 @@ export default function LiveScoring() {
     }
   }
 
+  async function applyCurrentBowler(value) {
+    setSaving(true);
+    try {
+      const saved = await sdk.table('innings_c').update({ Id: activeInnings.Id, current_bowler_c: value });
+      if (!saved.data?.length) throw new Error(saved.messages?.[0] || 'Bowler selection was not saved.');
+      setBowler(value);
+      await reloadInnings();
+    } catch (error) {
+      toast.error(error.message || 'Bowler selection was not saved.');
+      console.error(`innings_c bowler update failed: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function undoLastDelivery() {
     if (!activeInnings || !(deliveries ?? []).length || saving || recoveryRequired) return;
     const last = deliveries[deliveries.length - 1];
@@ -674,7 +736,7 @@ export default function LiveScoring() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/40 px-5 py-3"><div><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Innings {activeInnings.innings_number_c}</p><h2 className="font-heading text-2xl font-bold uppercase">{activeInnings.batting_team_c?.Name || 'Batting team'}</h2></div><span className="rounded-full bg-success-muted px-3 py-1 text-xs font-bold text-success">LIVE</span></div>
           <div className="grid gap-4 p-5 sm:grid-cols-[1.3fr_1fr]">
             <div><p className="font-heading text-5xl font-bold tabular-nums">{score.runs}<span className="text-2xl text-muted-foreground">/{score.wickets}</span></p><p className="mt-1 text-sm text-muted-foreground">{oversText(score.legalBalls)} overs · {maxOvers} overs · Run rate {score.legalBalls ? (score.runs / (score.legalBalls / 6)).toFixed(2) : '0.00'}</p><p className="mt-3 text-sm text-muted-foreground">Extras {score.extras} · Wides {score.wides} · No-balls {score.noBalls} · Byes {score.byes} · Leg-byes {score.legByes}</p></div>
-            <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === striker))}</p></div><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Non-striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === nonStriker))}</p></div><div className="col-span-2 rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Bowler</p><select aria-label="Current bowler" disabled={recoveryRequired || saving} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2" value={bowler} onChange={async e => { const value = e.target.value; const previousBowler = bowler; setSaving(true); try { const saved = await sdk.table('innings_c').update({ Id: activeInnings.Id, current_bowler_c: value }); if (!saved.data?.length) throw new Error(saved.messages?.[0] || 'Bowler selection was not saved.'); setBowler(value); await reloadInnings(); } catch (error) { setBowler(previousBowler); toast.error(error.message || 'Bowler selection was not saved. The previous bowler has been restored.'); await reloadInnings(); } finally { setSaving(false); } }}><option value="">Choose bowler</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div></div>
+            <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === striker))}</p></div><div className="rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Non-striker</p><p className="mt-1 font-semibold">{labelOf(battingPlayers.find(p => String(p.Id) === nonStriker))}</p></div><div className="col-span-2 rounded-lg bg-muted/50 p-3"><p className="text-muted-foreground">Bowler</p><select aria-label="Current bowler" disabled={recoveryRequired || saving} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2" value={bowler} onChange={async e => { const value = e.target.value; const previousBowler = bowler; setSaving(true); try { const saved = await sdk.table('innings_c').update({ Id: activeInnings.Id, current_bowler_c: value }); if (!saved.data?.length) throw new Error(saved.messages?.[0] || 'Bowler selection was not saved.'); setBowler(value); await reloadInnings(); } catch (error) { setBowler(previousBowler); toast.error(error.message || 'Bowler selection was not saved. The previous bowler has been restored.'); await reloadInnings(); } finally { setSaving(false); } }}><option value="">Choose bowler</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select><AddPlayerInline squadId={idOf(activeInnings.bowling_team_c)} role="Bowler" onAdded={async id => { await reloadPlayers(); await applyCurrentBowler(id); }} /></div></div>
           </div>
         </section>
 
@@ -769,7 +831,7 @@ export default function LiveScoring() {
               <div className="space-y-2"><Label>Extras type</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={extrasType} onChange={e => { const nextType = e.target.value; const allowedWickets = nextType === 'No-ball' ? ['None', 'Run out', 'Obstructing field'] : nextType === 'Wide' ? ['None', 'Run out', 'Stumped', 'Hit wicket', 'Obstructing field'] : WICKETS; setExtrasType(nextType); if (!allowedWickets.includes(wicketType)) { setWicketType('None'); setDismissedPlayer(''); setFielder(''); setNextBatter(''); setBattersCrossed(false); } }}>{EXTRAS.map(x => <option key={x}>{x}</option>)}</select></div>
               <div className="space-y-2"><Label>{extrasType === 'No-ball' ? 'Additional byes / leg-byes' : extrasType === 'Wide' ? 'Wide runs (1 + byes/leg-byes)' : 'Extras runs'}</Label><Input type="number" min="0" max="10" value={extrasRuns} onChange={e => setExtrasRuns(e.target.value)} /></div>
               <div className="space-y-2"><Label>Wicket</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={wicketType} onChange={e => setWicketType(e.target.value)}>{(extrasType === 'No-ball' ? ['None', 'Run out', 'Obstructing field'] : extrasType === 'Wide' ? ['None', 'Run out', 'Stumped', 'Hit wicket', 'Obstructing field'] : WICKETS).map(x => <option key={x}>{x}</option>)}</select></div>
-              {wicketType !== 'None' ? <>{wicketType === 'Run out' ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={battersCrossed} onChange={e => setBattersCrossed(e.target.checked)} />Batters had crossed when the wicket was broken</label> : null}<div className="space-y-2"><Label>Dismissed batter</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={dismissedPlayer} onChange={e => setDismissedPlayer(e.target.value)}><option value="">Choose batter</option>{battingPlayers.filter(p => [striker, nonStriker].includes(String(p.Id))).map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div><div className="space-y-2"><Label>Fielder (if applicable)</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={fielder} onChange={e => setFielder(e.target.value)}><option value="">Not applicable</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div><div className="space-y-2"><Label>Next batter</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={nextBatter} onChange={e => setNextBatter(e.target.value)}><option value="">Choose after wicket</option>{availableBatters.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div></> : null}
+              {wicketType !== 'None' ? <>{wicketType === 'Run out' ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={battersCrossed} onChange={e => setBattersCrossed(e.target.checked)} />Batters had crossed when the wicket was broken</label> : null}<div className="space-y-2"><Label>Dismissed batter</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={dismissedPlayer} onChange={e => setDismissedPlayer(e.target.value)}><option value="">Choose batter</option>{battingPlayers.filter(p => [striker, nonStriker].includes(String(p.Id))).map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div><div className="space-y-2"><Label>Fielder (if applicable)</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={fielder} onChange={e => setFielder(e.target.value)}><option value="">Not applicable</option>{bowlingPlayers.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select></div><div className="space-y-2"><Label>Next batter</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3" value={nextBatter} onChange={e => setNextBatter(e.target.value)}><option value="">Choose after wicket</option>{availableBatters.map(p => <option key={p.Id} value={p.Id}>{labelOf(p)}</option>)}</select><AddPlayerInline squadId={idOf(activeInnings?.batting_team_c)} role="Batter" onAdded={async id => { await reloadPlayers(); setNextBatter(id); }} /></div></> : null}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-xs text-muted-foreground">Wide and no-ball do not count as legal balls. Extras are added to the team total.</p><Button disabled={recoveryRequired || saving || deliveriesLoading || !striker || !nonStriker || !bowler || score.wickets >= 10 || score.legalBalls >= maxOvers * 6 || chaseWon}>{saving ? 'Saving…' : 'Record ball'}</Button></div>
           </section>
