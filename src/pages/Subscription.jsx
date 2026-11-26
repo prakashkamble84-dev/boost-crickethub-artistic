@@ -50,17 +50,32 @@ export default function Subscription() {
         <div className="mt-6 rounded-xl border border-border bg-muted/30 p-5">
           <div className="flex items-center gap-3">
             <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <ApperIcon name="FlaskConical" size={20} />
+              <ApperIcon name="Smartphone" size={20} />
             </span>
             <div>
-              <h2 className="font-semibold">Testing access</h2>
-              <p className="text-sm text-muted-foreground">No payment method or active paid plan is attached to this account.</p>
+              <h2 className="font-semibold">Pay by UPI</h2>
+              <p className="text-sm text-muted-foreground">Manual UPI payment to the CricketHub organizer</p>
             </div>
           </div>
+          <div className="mt-4 rounded-lg border border-border bg-card p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">UPI ID</p>
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+              <span className="break-all font-semibold">9970671306@kotakbank</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => navigator.clipboard?.writeText('9970671306@kotakbank')}>
+                <ApperIcon name="Copy" size={14} /> Copy UPI ID
+              </Button>
+            </div>
+            <p className="mt-3 text-sm text-muted-foreground">Pay exactly ₹999 for 12 months. Enter this UPI ID in your preferred UPI app.</p>
+          </div>
+          <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+            <li>Send ₹999 to the UPI ID above from your UPI app.</li>
+            <li>Save the successful transaction reference number.</li>
+            <li>Contact the CricketHub administrator with the reference number and payment proof.</li>
+            <li>Your organizer subscription will be activated for 12 months only after the payment is verified in the recipient bank account.</li>
+          </ol>
           <p className="mt-4 text-sm leading-6 text-muted-foreground">
-            You can test the tournament workflow without making a payment. Stripe checkout, recurring charges,
-            invoices and paid-plan enforcement are intentionally disabled until real-customer testing is ready.
-            This page does not create a trial, charge a card or claim that a subscription is active.
+            Payments are manually verified. A screenshot or submitted reference number does not itself confirm payment.
+            Online card payments, net banking and automatic activation are not available.
           </p>
         </div>
       </section>
