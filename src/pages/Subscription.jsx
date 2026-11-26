@@ -58,7 +58,17 @@ export default function Subscription() {
             </div>
           </div>
           <div className="mt-4 rounded-lg border border-border bg-card p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">UPI ID</p>
+            <p className="text-sm font-semibold">Scan this Kotak UPI QR code</p>
+            <div className="mt-3 flex justify-center rounded-xl bg-white p-3">
+              <img
+                src="https://api.qrserver.com/v1/create-qr-code/?size=360x360&data=upi%3A%2F%2Fpay%3Fpa%3D9970671306%40kotakbank%26pn%3DPRAKASH%2520GAJANAN%2520KAMBLE"
+                alt="Kotak UPI payment QR code for Prakash Gajanan Kamble"
+                className="h-64 w-64 max-w-full object-contain"
+                loading="eager"
+              />
+            </div>
+            <p className="mt-2 text-center text-xs text-muted-foreground">Scan with any UPI app. Verify the payee name before paying.</p>
+            <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">UPI ID</p>
             <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
               <span className="break-all font-semibold">9970671306@kotakbank</span>
               <Button type="button" variant="outline" size="sm" onClick={() => navigator.clipboard?.writeText('9970671306@kotakbank')}>
