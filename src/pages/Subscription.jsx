@@ -5,6 +5,9 @@ import ApperIcon from '@/components/ApperIcon';
 export const route = { path: '/subscription', layout: 'owner', access: 'authenticated' };
 export const nav = { icon: 'CreditCard', label: 'Subscription', section: 'Account', order: 90 };
 
+const ANNUAL_PRICE = 999;
+const PLAN_DURATION = '12 months';
+
 const included = [
   'Create and manage tournaments',
   'Register teams and players',
@@ -29,6 +32,20 @@ export default function Subscription() {
             <span className="size-2 rounded-full bg-amber-500" />
             Not activated
           </span>
+        </div>
+        <div className="mt-6 rounded-xl border border-primary/30 bg-primary/5 p-5">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">CricketHub Organizer Plan</p>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="font-heading text-4xl font-extrabold">₹{ANNUAL_PRICE.toLocaleString('en-IN')}</span>
+                <span className="text-sm text-muted-foreground">/ {PLAN_DURATION}</span>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">One annual subscription per organizer account.</p>
+            </div>
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">Payments not enabled</span>
+          </div>
+          <p className="mt-4 text-sm leading-6 text-muted-foreground">This is the published plan price. Online checkout, payment verification and automatic paid access are not active yet. Do not treat this display as a completed purchase.</p>
         </div>
         <div className="mt-6 rounded-xl border border-border bg-muted/30 p-5">
           <div className="flex items-center gap-3">
